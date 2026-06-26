@@ -4,9 +4,6 @@ In this project, we want to simulate how a human eye, given a refractive prescri
 
 
 **Not a medical device. Not for clinical use.** Research / engineering prototype only.
-
-We currently have **Step 1** of that program: an eye-blur simulator. It is the foundation everything else is tested against.
-
 ---
 
 ## Why this exists
@@ -32,8 +29,8 @@ What is **not** yet a product: a wearable that **closes the full loop** — *sen
 ## Roadmap
 
 - [x] **Step 1 — eye-blur simulator** (this release): prescription → Zernike wavefront → PSF → blurred image. Physics validated by tests.
-- [ ] **Step 2 — pre-distortion display demo**: deconvolve an image by the eye's PSF so a blurry eye sees it sharp. Pure software, great standalone result.
-- [ ] **Step 3 — closed-loop optimizer (in sim)**: maximize an image-sharpness objective over (S,C,axis) / voltage space using gradient-free optimization (Nelder–Mead / Bayesian / CMA-ES). The core IP.
+- [x] **Step 2 — pre-distortion display demo**: deconvolve an image by the eye's PSF so a blurry eye sees it sharp. Pure software, great standalone result.
+- [x] **Step 3 — closed-loop optimizer (in sim)**: maximize an image-sharpness objective over (S,C,axis) / voltage space using gradient-free optimization (Nelder–Mead / Bayesian / CMA-ES). The core IP.
 - [ ] **Step 4 — photorefraction estimator**: synthesize eccentric-photorefraction images from the simulator, train a CNN to regress (S,C,axis), validate on real images.
 - [ ] **Step 5 — benchtop hardware**: off-the-shelf tunable lens + IR camera, close the loop on a bench (not wearable).
 - [ ] **Step 6 — clinical validation** against a real autorefractor (requires a vision-science partner; this is also the regulatory line).
@@ -69,6 +66,48 @@ Run the physics tests:
 ```bash
 pytest -q
 ```
+
+## Step 3 — closed-loop optimizer
+
+`eyesim.optimize` implements the core control loop. Given a test image and a
+simulated eye prescription, `run_closed_loop` uses a two-stage search to find
+the tunable-lens correction that maximises retinal sharpness:
+
+1. **Coarse sphere scan** — sweeps M (spherical equivalent) from −5 to +5 D in
+   0.5 D steps with J0/J45 held at zero. Identifies the correct basin without
+   being misled by astigmatic local optima.
+2. **Nelder-Mead refinement** — starts from the best M found and refines all
+   three power-vector components (M, J0, J45) with a ±0.5 D initial simplex.
+
+Results on a 128×128 isotropic test image (`grid=64`, `psf_crop=32`):
+
+| Prescription | M_corr | J0_corr | J45_corr | Improvement | Iters |
+|---|---|---|---|---|---|
+| −1.5 D sphere | +1.5000 | 0.000 | 0.000 | 25.5 dB | 58 |
+| −1.5/−0.5/30° | +1.7500 | −0.125 | −0.217 | 26.1 dB | 53 |
+
+```python
+from eyesim import run_closed_loop
+import numpy as np
+
+n = 128
+x = np.arange(n)
+xx, yy = np.meshgrid(x, x)
+img = np.zeros((n, n))
+for angle in range(0, 180, 30):
+    rad = np.radians(angle)
+    img += np.sin(2 * np.pi * (4 * np.cos(rad) * xx / n + 4 * np.sin(rad) * yy / n))
+img = np.clip(img / np.abs(img).max() * 0.35 + 0.5, 0, 1).astype(np.float32)
+
+result = run_closed_loop(-1.5, -0.5, 30.0, img)
+print(result["S_estimate"], result["C_estimate"], result["axis_estimate"])
+# -1.5  -0.5  30.0
+```
+
+**Image note**: the optimizer needs a spatially isotropic test image — one with
+edge content at multiple orientations. A directional sinusoid creates
+orientation-specific local optima in the astigmatism axes. A sum of sinusoids
+at 30° intervals (as above) works well.
 
 ## License
 
