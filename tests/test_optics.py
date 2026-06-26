@@ -1,8 +1,4 @@
-"""Physics-invariant tests for the eye simulator.
-
-These encode the checks that MUST hold for the simulator to be trustworthy.
-If a future change breaks one, the simulator is wrong.
-"""
+"""Tests for the eye simulator."""
 import numpy as np
 from eyesim.optics import (
     prescription_to_power_vector,

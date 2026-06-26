@@ -1,6 +1,5 @@
 """
 Tests for the pre-distortion pipeline.
-
 Key property under test: predistort(image, Rx) * blur(Rx) ≈ image.
 Both predistort and the simulation blur use the same circular-FFT model,
 so they form a mathematically consistent forward/inverse pair.
@@ -23,10 +22,6 @@ def _psnr(a, b):
 
 @pytest.fixture
 def img_smooth():
-    """256×256 sinusoidal image at 4 cycles per dimension.
-    Frequency f = 4/256 ≈ 0.016 cy/px — well inside the passband of
-    prescriptions up to ~-2D, so blur attenuates but does not destroy signal.
-    """
     n = 256
     x = np.arange(n)
     xx, yy = np.meshgrid(x, x)
@@ -43,10 +38,6 @@ def mild_rx():
 def strong_rx():
     return dict(S=-4.0, C=-2.0, theta_deg=90.0)
 
-
-# --------------------------------------------------------------------------
-# Output contract (shape / range)
-# --------------------------------------------------------------------------
 def test_predistort_shape_and_range():
     rng = np.random.default_rng(1)
     img = rng.random((128, 128)).astype(np.float32)
@@ -70,9 +61,6 @@ def test_display_chain_keys(img_smooth, mild_rx):
         assert key in chain
 
 
-# --------------------------------------------------------------------------
-# Physics: predistorted ⊛ PSF ≈ original
-# --------------------------------------------------------------------------
 def test_display_chain_improves_psnr(img_smooth, mild_rx):
     """
     For a structured image, predistortion + blur should recover the original
@@ -97,9 +85,6 @@ def test_lower_noise_power_sharper(img_smooth, mild_rx):
     assert psnr_at(1e-4) >= psnr_at(1e-2) - 1.0
 
 
-# --------------------------------------------------------------------------
-# Wiener deconvolve is the inverse of _fft_blur (consistent model)
-# --------------------------------------------------------------------------
 def test_wiener_round_trip(img_smooth):
     """
     _fft_blur then wiener_deconvolve should nearly recover the original.

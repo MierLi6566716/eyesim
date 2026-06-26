@@ -1,14 +1,15 @@
 # eyesim
 
-Simulate how a human eye with a given refractive prescription **(Sphere, Cylinder, Axis)** sees the world — and build toward a **closed-loop self-refracting corrector**: a wearable that objectively measures your refraction, drives a tunable lens to correct it, then re-measures and converges, with no optometrist and no manual "1 or 2?".
+In this project, we want to simulate how a human eye, given a refractive prescription **(Sphere, Cylinder, Axis)** sees the world, and build toward a **closed-loop self-refracting corrector**: ultimately, if possible, a wearable device that measures your refraction, drives a tunable lens to correct it, then re measures and converges, without needing any optometrist and no manul 1 or 2 selections.
 
-> ⚠️ **Not a medical device. Not for clinical use.** Research / engineering prototype only.
 
-This repo is **Step 1** of that program: a physically-faithful eye-blur simulator. It is the foundation everything else is tested against.
+**Not a medical device. Not for clinical use.** Research / engineering prototype only.
+
+We currently have **Step 1** of that program: an eye-blur simulator. It is the foundation everything else is tested against.
 
 ---
 
-## Why this exists (the open lane)
+## Why this exists
 
 The three pieces of "glasses that measure and fix your prescription" each already exist in isolation:
 
@@ -16,7 +17,7 @@ The three pieces of "glasses that measure and fix your prescription" each alread
 - **Correction** — electronically tunable liquid-crystal glasses are funded and shipping prototypes (IXI raised ~$36M; Morrow, Laclarée, Deep Optics).
 - **Pre-distortion displays** — Berkeley/MIT light-field "vision-correcting displays" and inverse-blur deconvolution are well-published and patented.
 
-What is **not** yet a product: a single wearable that **closes the full loop** — *senses* refraction objectively, *drives* tunable correction, *re-measures* residual blur, and *self-converges* — driven by measured refractive error rather than by gaze/distance. That integration (the autorefractor and the corrector being the same feedback device) is the wedge. It's a sensing + optimization + control problem — a software problem with a thin optics layer.
+What is **not** yet a product: a wearable that **closes the full loop** — *senses* refraction objectively, *drives* tunable correction, *re-measures* residual blur, and *self-converges* — driven by measured refractive error rather than by gaze/distance. This integration is a sensing + optimization + control problem.
 
 ## The system as a control loop
 
@@ -27,7 +28,6 @@ What is **not** yet a product: a single wearable that **closes the full loop** �
 [Feedback: residual blur]  <-  [Actuator: tunable lens]  <-  [Controller: (S,C,axis) -> voltages]
 ```
 
-Each box is an isolable software/hardware subproblem. **You can build and de-risk the entire algorithmic stack in simulation before touching hardware** — which is exactly what Step 1 enables.
 
 ## Roadmap
 
@@ -69,27 +69,6 @@ Run the physics tests:
 ```bash
 pytest -q
 ```
-
-## What the simulator gets right (and why you can trust it)
-
-The test suite (`tests/test_optics.py`) encodes the physics invariants:
-
-- zero prescription → diffraction-limited sharp spot;
-- pure sphere → **symmetric** blur that **grows** with diopters;
-- pure cylinder → **directional** (elliptical) blur whose orientation **rotates with the axis**, with axis 0 and 90 as mirror images;
-- power-vector decomposition matches the Thibos M/J0/J45 formulas used in the refraction literature.
-
-## How it works (the only "medical" part)
-
-A prescription is three numbers. Defocus and astigmatism are three low-order Zernike modes:
-
-1. `(S, C, axis)` → power vector `M = S + C/2`, `J0`, `J45` (Thibos).
-2. Power vector → Zernike wavefront coefficients (defocus `Z2^0`, astigmatism `Z2^±2`).
-3. Pupil function `P = aperture · exp(i·k·W)`.
-4. `PSF = |FFT(P)|²` (Fourier optics).
-5. `retinal image = sharp image ⊛ PSF`.
-
-Everything downstream is signal processing, optimization, and control.
 
 ## License
 

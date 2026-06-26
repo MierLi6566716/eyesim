@@ -3,7 +3,7 @@ Simulate how a given prescription sees an image.
 
 Usage:
     python examples/simulate.py --image path/to/photo.png --S -2.0 --C -1.0 --axis 45
-    python examples/simulate.py --demo        # use a built-in synthetic eye chart
+    python examples/simulate.py --demo        
 
 Saves <name>_blurred.png next to the input (or in examples/ for the demo).
 """
