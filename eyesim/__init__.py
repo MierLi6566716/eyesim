@@ -15,7 +15,12 @@ from .optimize import (
     power_vector_to_prescription,
     run_closed_loop,
 )
-__version__ = "0.3.0"
+from .photorefraction import (
+    render_single,
+    render_multichannel,
+    sample_prescription,
+)
+__version__ = "0.4.0"
 __all__ = [
     "prescription_to_power_vector",
     "psf_from_prescription",
@@ -27,4 +32,7 @@ __all__ = [
     "sharpness",
     "power_vector_to_prescription",
     "run_closed_loop",
+    "render_single",
+    "render_multichannel",
+    "sample_prescription",
 ]
