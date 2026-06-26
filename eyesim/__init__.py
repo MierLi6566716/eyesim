@@ -5,10 +5,18 @@ from .optics import (
     blur_image,
     simulate_vision,
 )
-__version__ = "0.1.0"
+from .predistort import (
+    predistort,
+    simulate_display_chain,
+    wiener_deconvolve,
+)
+__version__ = "0.2.0"
 __all__ = [
     "prescription_to_power_vector",
     "psf_from_prescription",
     "blur_image",
     "simulate_vision",
+    "predistort",
+    "simulate_display_chain",
+    "wiener_deconvolve",
 ]
