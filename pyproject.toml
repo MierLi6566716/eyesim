@@ -1,0 +1,14 @@
+[project]
+name = "eyesim"
+version = "0.1.0"
+description = "Simulate how an eye with a given prescription sees, and (later) close the loop on self-refraction + tunable correction."
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.24", "scipy>=1.10"]
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.6"]
+dev = ["pytest>=7.0"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
