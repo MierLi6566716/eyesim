@@ -10,7 +10,12 @@ from .predistort import (
     simulate_display_chain,
     wiener_deconvolve,
 )
-__version__ = "0.2.0"
+from .optimize import (
+    sharpness,
+    power_vector_to_prescription,
+    run_closed_loop,
+)
+__version__ = "0.3.0"
 __all__ = [
     "prescription_to_power_vector",
     "psf_from_prescription",
@@ -19,4 +24,7 @@ __all__ = [
     "predistort",
     "simulate_display_chain",
     "wiener_deconvolve",
+    "sharpness",
+    "power_vector_to_prescription",
+    "run_closed_loop",
 ]
