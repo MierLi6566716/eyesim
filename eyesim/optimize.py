@@ -6,7 +6,7 @@ test image displayed through an eye with an unknown prescription, find the
 tunable-lens correction that maximises image sharpness.
 
 Three functions:
-1. Sharpness metric: This is what we are trying to maximize. 
+1. Sharpness metrI ic: This is what we are trying to maximize. 
 2. Optimizer: We need this to be gradient-free for hardware aplications. 
 3. Search space: We optimize over (M, J0, J45), Cartesian. 
 """
