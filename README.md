@@ -108,7 +108,3 @@ print(result["S_estimate"], result["C_estimate"], result["axis_estimate"])
 edge content at multiple orientations. A directional sinusoid creates
 orientation-specific local optima in the astigmatism axes. A sum of sinusoids
 at 30° intervals (as above) works well.
-
-## License
-
-MIT. **Not a medical device.**
