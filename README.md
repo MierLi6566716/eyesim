@@ -19,6 +19,18 @@ This is a visualization of the physics and math behind the eysim project:
 2. 3D Optics Bench - Simplified geometric diagram of real optics. When it's a tight point, we have sharp focus. When it's a big smear, that's a blur. Drag to orbit the camera around it.
 3. Eye PSF + Blur Preview - Computes the real point-spread function for your exact slider values and show a test target blurred through it, with the Laplacian-energy sharpness number. This is the ground truth.
 
+**/Simulate**: Exact Physics
+1. Result:
+   - **What the eye sees**: Input photo, blurred through the exact PSF for that prescription
+   - **Pre-Distorted (Corrected)**: the Wiener-deconvolved view, which is what to display on a screen so that a person with that prescription perceives it as sharp. It looks blurry if you don't have that prescription.
+   - **Live GPU Filter**: Input photo run through a WebGL2 shader, convolving against a small version of the same blur kernel
+   - Each run gets a (M, J0, J45) output, and this gets saved as a public gallery input
+
+**/Diagnose**: Experimental Prediction
+1. Capture Image/Upload: you need to capture your eye, the circular guide helps you center the eye. It is important to note that this in no way is comparable to a retinal image or photo refraction image.
+2. The Confidence Gauge: Compare brightness, contrast, edge-sharpness, bright-pixel fraction, and corner brightness) against real training distribution.
+
+**/Gallery/Stats**: Live M-Distribution histogram, model filtering, pagination, all real SQL aggregates.
 
 ## Why this exists
 
