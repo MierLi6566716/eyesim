@@ -2,9 +2,20 @@
 
 In this project, we want to simulate how a human eye, given a refractive prescription **(Sphere, Cylinder, Axis)** sees the world, and build toward a **closed-loop self-refracting corrector**: ultimately, if possible, a wearable device that measures your refraction, drives a tunable lens to correct it, then re measures and converges, without needing any optometrist and no manul 1 or 2 selections.
 
-
 **Not a medical device. Not for clinical use.** Research / engineering prototype only.
 ---
+## Demo
+Access this website: https://frontend-dun-ten-37.vercel.app 
+This is a visualization of the physics and math behind the eysim project:
+**/Lab**: The physics playground
+1. Left sidebar - Prescription panel:
+   **Sphere(S)**: overall focusing error in diopters. Negative = nearsighted (myopia), positive = farsighted (hyperopia).
+   **Cylinder(C)**: astigmatism magnitude (always ≤0 here).
+   **Axis**: the orientation of that astigmatism, 0–180°.
+   **Pupil Radius**: simulated pupil size in mm; larger pupils let in more of the wavefront error, which changes blur severity.
+2. 3D Optics Bench - Simplified geometric diagram of real optics. When it's a tight point, we have sharp focus. When it's a big smear, that's a blur. Drag to orbit the camera around it.     
+3. Eye PSF + Blur Preview - Computes the real point-spread function for your exact slider values and show a test target blurred through it, with the Laplacian-energy sharpness number. This is the ground truth.
+
 
 ## Why this exists
 
