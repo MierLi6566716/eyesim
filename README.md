@@ -3,7 +3,8 @@
 In this project, we want to simulate how a human eye, given a refractive prescription **(Sphere, Cylinder, Axis)** sees the world, and build toward a **closed-loop self-refracting corrector**: ultimately, if possible, a wearable device that measures your refraction, drives a tunable lens to correct it, then re measures and converges, without needing any optometrist and no manul 1 or 2 selections.
 
 **Not a medical device. Not for clinical use.** Research / engineering prototype only.
----
+
+
 ## Demo
 Access this website: https://frontend-dun-ten-37.vercel.app 
 This is a visualization of the physics and math behind the eysim project:
