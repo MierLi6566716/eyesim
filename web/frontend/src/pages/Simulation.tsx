@@ -1,0 +1,186 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Article, Figure, Note, PageHeader, Section, Stat, StatRow, Tex, type TocEntry } from "../components/Article";
+import type { Eye } from "../figures/EyeControls";
+import { PowerVectorFigure } from "../figures/PowerVectorFigure";
+import { OpticsChainFigure, PredistortFigure } from "../figures/OpticsFigures";
+import { PhotorefractionFigure } from "../figures/PhotorefractionFigure";
+import { TrainingFigure } from "../figures/TrainingFigure";
+import { ClosedLoopFigure } from "../figures/ClosedLoopFigure";
+
+const TOC: TocEntry[] = [
+  { id: "power-vectors", num: "1.1", title: "Prescriptions as vectors" },
+  { id: "wave-optics", num: "1.2", title: "Wavefront to retinal image" },
+  { id: "predistortion", num: "1.3", title: "Pre-distorted displays" },
+  { id: "photorefraction", num: "1.4", title: "Photorefraction sensing" },
+  { id: "cnn", num: "1.5", title: "PupilNet estimator" },
+  { id: "closed-loop", num: "1.6", title: "Closing the loop" },
+  { id: "limits", num: "1.7", title: "What the simulation can't tell us" },
+];
+
+export function Simulation() {
+  const [eye, setEye] = useState<Eye>({ S: -2.25, C: -0.75, axis: 30, pupil: 2 });
+  return (
+    <>
+      <PageHeader
+        kicker="Part 1: simulation"
+        title="A digital twin of a refracting eye"
+        lede={
+          <>
+            Before building hardware, we built a simulation of every stage: how a prescription blurs the
+            retinal image, what an infrared camera sees in the pupil, how a CNN reads that image back, and
+            how a tunable lens converges on the correction. Figures 1 to 7 recompute live in your browser.
+          </>
+        }
+      />
+      <Article toc={TOC}>
+        <Section id="power-vectors" num="1.1" title="Prescriptions as vectors">
+          <p>
+            A spectacle prescription gives a sphere <Tex>S</Tex>, a cylinder <Tex>C</Tex> and an axis{" "}
+            <Tex>\theta</Tex>. That triple is awkward to learn or optimise over: the axis wraps around at
+            180°, and the axis is undefined when <Tex>C = 0</Tex>. Following Thibos et al. (1997), every
+            stage of eyesim works in <em>power-vector</em> space instead:
+          </p>
+          <Tex block>{String.raw`M = S + \tfrac{C}{2},\qquad J_0 = -\tfrac{C}{2}\cos 2\theta,\qquad J_{45} = -\tfrac{C}{2}\sin 2\theta`}</Tex>
+          <p>
+            <Tex>M</Tex> is the spherical equivalent. <Tex>{"(J_0, J_{45})"}</Tex> is a Cartesian astigmatism
+            vector. Distances in this space are clinically meaningful, and sums are exact: the residual
+            error of an eye wearing a lens is simply <Tex>{String.raw`\mathbf{p}_{\text{eye}} + \mathbf{p}_{\text{lens}}`}</Tex>.
+          </p>
+          <Figure num={1} caption="The same prescription in two representations. Drag the axis slider through 180° and the J-plane point returns to where it started. The power vector has no discontinuity to learn around.">
+            <PowerVectorFigure eye={eye} onChange={setEye} />
+          </Figure>
+        </Section>
+
+        <Section id="wave-optics" num="1.2" title="Wavefront to retinal image">
+          <p>
+            Refractive error is a phase error across the pupil. We map the power vector onto the three
+            second-order Zernike modes (defocus and the two astigmatisms), which gives the wavefront
+            aberration <Tex>W(x, y)</Tex>. The point-spread function follows from Fraunhofer diffraction:
+          </p>
+          <Tex block>{String.raw`\mathrm{PSF}(u,v) \;=\; \Bigl|\,\mathcal{F}\bigl\{A(x,y)\,e^{\,i\frac{2\pi}{\lambda}W(x,y)}\bigr\}\Bigr|^2, \qquad I_{\text{retina}} = I_{\text{scene}} \ast \mathrm{PSF}`}</Tex>
+          <p>
+            Here <Tex>A</Tex> is the circular pupil aperture and <Tex>\lambda = 550</Tex> nm. For large
+            blur, the phase wraps faster than a 512² grid can sample. There, the figure switches to the ray-optics
+            limit, where each pupil point is deflected by the local wavefront slope. The two
+            models agree on blur size and orientation to within a few percent where they overlap.
+          </p>
+          <Figure
+            num={2}
+            caption={
+              <>
+                Live optics chain. (a) Wavefront error over the pupil, in waves. (b) Point-spread function,
+                log intensity. (c) A letter chart at true Snellen scale (1 px = 1 arcmin; the bottom row is
+                20/20) convolved with that PSF. Try a pure cylinder: blur smears along one meridian only.
+              </>
+            }
+          >
+            <OpticsChainFigure eye={eye} onChange={setEye} />
+          </Figure>
+        </Section>
+
+        <Section id="predistortion" num="1.3" title="Pre-distorted displays">
+          <p>
+            If the PSF is known, a screen can show an image that the blur will undo. The Wiener filter
+            gives the least-squares inverse:
+          </p>
+          <Tex block>{String.raw`\hat{P} \;=\; \frac{H^{*}}{|H|^{2} + k}\;\hat{I}, \qquad H = \mathcal{F}\{\mathrm{PSF}\}`}</Tex>
+          <p>
+            The catch is physical. A display can't emit negative light, so the inverse must be clipped to
+            [0, 1]. Defocus also puts exact zeros in <Tex>H</Tex>, and those spatial frequencies are lost.
+            Pre-distortion helps most for mild error and gives out as blur grows. This is the reason the
+            project moves on to correcting the optics themselves.
+          </p>
+          <Figure num={3} caption="Wiener pre-distortion for the eye set in Figure 2. Raise the regulariser k to trade ringing for contrast. Edge energy is the mean squared gradient (the sharpness objective used in §1.6) relative to the unblurred chart.">
+            <PredistortFigure eye={eye} />
+          </Figure>
+        </Section>
+
+        <Section id="photorefraction" num="1.4" title="Photorefraction sensing">
+          <p>
+            To correct an eye automatically, the device first has to measure it. Eccentric
+            photorefraction does this with a camera and an infrared LED offset from the lens. Light
+            reflects off the retina and leaves the pupil tilted by the eye's own refractive error. Only
+            rays that land inside the camera aperture are recorded, which paints a crescent across the
+            pupil. For a pupil point <Tex>(x, y)</Tex> and camera distance <Tex>D</Tex>:
+          </p>
+          <Tex block>{String.raw`\begin{aligned} s_x &= 2\,[(M+J_0)\,x + J_{45}\,y] \\ s_y &= 2\,[(M-J_0)\,y + J_{45}\,x] \end{aligned}\qquad L(x,y) \propto \exp\!\Bigl(-\frac{(s_x D - e_x)^2 + (s_y D - e_y)^2}{2\sigma^2}\Bigr)`}</Tex>
+          <p>
+            The factor 2 comes from the double pass through the eye. A horizontal LED encodes{" "}
+            <Tex>M</Tex> and <Tex>J_0</Tex>, and a vertical LED encodes <Tex>M</Tex> and <Tex>{"J_{45}"}</Tex>, so
+            two frames determine the full power vector.
+          </p>
+          <Figure num={4} caption="Synthetic IR frames for both LEDs (the PupilNet input). The lower row shows the model's fundamental ambiguity: the image depends only on the product M·D.">
+            <PhotorefractionFigure eye={eye} />
+          </Figure>
+          <Note label="Finding.">
+            <p>
+              Because the frames depend only on <Tex>M\cdot D</Tex>, the ±10% distance jitter used for
+              domain randomisation makes <Tex>M</Tex> unrecoverable to about 0.08 D. The error also grows in
+              proportion to |M|, which accounts for the fan-shaped scatter in Figure 5. On hardware,{" "}
+              <Tex>D</Tex> is measurable, so the fix is to condition the network on it, or to regress{" "}
+              <Tex>M\cdot D</Tex> and divide.
+            </p>
+          </Note>
+        </Section>
+
+        <Section id="cnn" num="1.5" title="PupilNet estimator">
+          <p>
+            PupilNet is a 450k-parameter CNN built from depthwise-separable convolutions. It maps the
+            two-channel 64×64 photorefraction frame to <Tex>{"(M, J_0, J_{45})"}</Tex>. It was trained for 100
+            epochs on 100,000 synthetic frames with randomised pupil size, distance, eccentricity and
+            sensor noise. The architecture avoids operations that break INT8 quantisation, so the
+            same network can later run on a small NPU in a glasses frame.
+          </p>
+          <StatRow>
+            <Stat value="0.184" unit="D" label="Test MAE, spherical equivalent M" />
+            <Stat value="0.046" unit="D" label={<>Test MAE, <Tex>J_0</Tex></>} />
+            <Stat value="0.050" unit="D" label={<>Test MAE, <Tex>{"J_{45}"}</Tex></>} />
+            <Stat value="100k" label="Synthetic training frames" />
+          </StatRow>
+          <Figure num={5} caption="Training history of the checkpoint used throughout this site (checkpoints/best.pt). Hover for per-epoch values.">
+            <TrainingFigure />
+          </Figure>
+          <Figure num={6} caption="Held-out test predictions against ground truth. Pile-ups at M = −6 and +4 D are the clipping limits of the training distribution.">
+            <img
+              src="/figures/test_scatter.png"
+              alt="Scatter plots of predicted versus true M, J0 and J45 on the synthetic test set"
+              style={{ width: "100%", display: "block", background: "#fff" }}
+            />
+          </Figure>
+        </Section>
+
+        <Section id="closed-loop" num="1.6" title="Closing the loop">
+          <p>
+            The estimate commands a tunable lens. The device then keeps refining, adjusting the lens to
+            maximise the sharpness of the retinal image. With no prior, the optimiser first scans
+            spherical power from −5 to +5 D to find the right basin, then runs Nelder-Mead over all three
+            components. With the CNN, it starts at the negated estimate and only refines.
+          </p>
+          <Figure num={7} caption="The Step 3 optimiser, run live on the eye from Figure 2 using the retinal sharpness of a Siemens star as its objective. Compare the evaluations each strategy needs to reach the 0.25 D clinical step.">
+            <ClosedLoopFigure eye={eye} />
+          </Figure>
+          <p>
+            In the full offline pipeline (20 random eyes, finer grid), the median residual drops from 1.34
+            D uncorrected to 0.08 D after a one-shot CNN correction. After refinement it is effectively
+            zero, with all 20 eyes inside the 0.25 D clinical step.
+          </p>
+        </Section>
+
+        <Section id="limits" num="1.7" title="What the simulation can't tell us">
+          <p>
+            Every number above describes how well the model fits <em>our simulator</em>, not real eyes.
+            Real photorefraction frames have hard crescent edges, a corneal glint, retinal
+            retro-reflection and higher-order aberrations, and none of these are modelled. Measuring that gap
+            requires real images with trustworthy labels. That is the job of the{" "}
+            <Link to="/model-eye">motorized model eye</Link>.
+          </p>
+          <p>
+            To run the full-resolution Python pipeline on your own photos, use the{" "}
+            <Link to="/tools/simulate">backend tools</Link>.
+          </p>
+        </Section>
+      </Article>
+    </>
+  );
+}

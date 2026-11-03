@@ -1,8 +1,7 @@
 """
-Turn a prescription (Sphere, Cylinder, Axis) into the blur a human
-eye sees using Fourier optics.
+Shows what an eye with a given prescription sees: prescription -> blur.
 
-Pipeline:
+Steps:
     (S, C, theta)  ->  wavefront aberration over the pupil  (Zernike defocus + astigmatism)
                    ->  pupil function  P = aperture * exp(i * k * W)
                    ->  PSF = |FFT(P)|^2 
@@ -17,7 +16,7 @@ Conventions
 from __future__ import annotations
 import numpy as np
 
-# Part 1: We convert (s, c, theta) to (M, J0, J45)
+# Part 1: (S, C, axis) -> (M, J0, J45)
 def prescription_to_power_vector(S: float, C: float, theta_deg: float):
     """
     Convert (Sphere, Cylinder, Axis) to the power-vector (M, J0, J45).
@@ -29,20 +28,24 @@ def prescription_to_power_vector(S: float, C: float, theta_deg: float):
     M = S + C / 2.0
     J0 = -(C / 2.0) * np.cos(2 * theta)
     J45 = -(C / 2.0) * np.sin(2 * theta)
-    return M, J0, J45
+    return float(M), float(J0), float(J45)
 
-# Part 2: We get zernike coeeficients by converting D to meters of optial path difference using pupil radius
+# Part 2: dioptres -> Zernike coefficients (metres of wavefront error over the pupil)
 def power_vector_to_zernike(M, J0, J45, pupil_radius_mm, wavelength_nm=550.0):
     """
     Convert power-vector dioptres into Zernike wavefront coefficients, for defocus (Z2^0) and the two astigmatism modes
     (Z2^-2, Z2^2).
     """
     r = pupil_radius_mm * 1e-3  # mm -> m
-    # Defocus: convert dioptres of mean power to RMS Zernike defocus (metres)
+    # Defocus: convert dioptres of mean power to RMS Zernike defocus (metres).
+    # Standard relation (Thibos et al. 2002, "Power vector analysis..."):
+    #   M = -4*sqrt(3) * c_2^0 / r^2   =>   c_2^0 = -M * r^2 / (4*sqrt(3))
     c_defocus = -M * r**2 / (4.0 * np.sqrt(3.0))
-    # Astigmatism: J0 and J45 map to the two 2nd-order astigmatism Zernikes.
-    c_astig_0 = -J0 * r**2 / (2.0 * np.sqrt(6.0)) * 2.0   # Z2^2  (0/90 oriented)
-    c_astig_45 = -J45 * r**2 / (2.0 * np.sqrt(6.0)) * 2.0  # Z2^-2 (45 oriented)
+    # Astigmatism: J0 and J45 map to the two 2nd-order astigmatism Zernikes
+    # by the same-family relation: J = -2*sqrt(6) * c_2^{+-2} / r^2
+    #   =>   c_2^{+-2} = -J * r^2 / (2*sqrt(6))
+    c_astig_0 = -J0 * r**2 / (2.0 * np.sqrt(6.0))    # Z2^2  (0/90 oriented)
+    c_astig_45 = -J45 * r**2 / (2.0 * np.sqrt(6.0))  # Z2^-2 (45 oriented)
     return c_defocus, c_astig_0, c_astig_45
 
 
@@ -72,7 +75,69 @@ def wavefront(n, c_defocus, c_astig_0, c_astig_45):
     W = c_defocus * Z_defocus + c_astig_0 * Z_astig_0 + c_astig_45 * Z_astig_45
     return W * aperture, aperture
 
-# Fourier optics
+def blur_diameter_arcmin(M_dioptres: float, pupil_radius_mm: float = 2.0) -> float:
+    """
+    Blur circle diameter in arcminutes for a focus error of |M| D through a
+    pupil of this radius (angle = M * pupil diameter). Example: 1 D through a
+    3 mm pupil gives about 10 arcmin, roughly 20/100 to 20/200 vision.
+    """
+    pupil_diameter_m = 2.0 * pupil_radius_mm * 1e-3
+    theta_rad = abs(M_dioptres) * pupil_diameter_m
+    return theta_rad * (180.0 / np.pi) * 60.0
+
+
+def min_psf_crop(M_max: float, pupil_radius_mm: float = 2.0,
+                 wavelength_nm: float = 550.0, margin: float = 1.5) -> int:
+    """
+    Smallest even PSF crop that still holds the whole blur disc for |M| <= M_max.
+    The disc spans about |M| * pupil_diameter^2 / wavelength bins; cropping
+    tighter cuts off part of the blur.
+    """
+    d = 2.0 * pupil_radius_mm * 1e-3
+    n_bins = abs(M_max) * d ** 2 / (wavelength_nm * 1e-9)
+    crop = int(np.ceil(n_bins * margin / 2.0)) * 2
+    return max(crop, 16)
+
+
+def calibrated_psf_for_image(
+    S: float, C: float, theta_deg: float, image_shape: tuple[int, int],
+    pupil_radius_mm: float = 2.0, wavelength_nm: float = 550.0,
+    assumed_fov_deg: float = 25.0, native_crop_cap: int = 256,
+) -> np.ndarray:
+    """
+    Blur kernel sized for an image of image_shape. An image has no real size,
+    so assume it fills assumed_fov_deg of view (a phone or laptop at arm's
+    length), turn the physical blur angle into pixels, and resample the PSF
+    to that. Sizing the kernel any other way makes blur look far too strong
+    or too weak.
+    """
+    from scipy.ndimage import zoom as _zoom
+
+    h, w = image_shape[:2]
+    worst = max(abs(S), abs(S + C))  # the two principal meridian powers
+
+    blur_arcmin = blur_diameter_arcmin(worst, pupil_radius_mm)
+    arcmin_per_image_px = (assumed_fov_deg * 60.0) / min(h, w)
+    target_px = blur_arcmin / arcmin_per_image_px if arcmin_per_image_px > 0 else 2
+    target_px = int(np.clip(round(target_px), 1, min(h, w) * 0.6))
+    target_px = max(2, target_px + (target_px % 2))  # round up to even, floor 2
+
+    native_crop = int(np.clip(min_psf_crop(worst + 0.5, pupil_radius_mm), 16, native_crop_cap))
+    native_grid = max(2 * native_crop, 256)
+    psf_native = psf_from_prescription(
+        S, C, theta_deg, pupil_radius_mm=pupil_radius_mm, wavelength_nm=wavelength_nm,
+        grid=native_grid, psf_crop=native_crop,
+    )
+
+    psf_resampled = _zoom(psf_native, target_px / native_crop, order=1)
+    psf_resampled = np.clip(psf_resampled, 0.0, None)
+    total = psf_resampled.sum()
+    if total <= 0:
+        psf_resampled = np.ones((3, 3))  # degenerate near-zero-power fallback
+        total = psf_resampled.sum()
+    return psf_resampled / total
+
+
 def psf_from_prescription(
     S, C, theta_deg,
     pupil_radius_mm=2.0,
@@ -104,10 +169,9 @@ def psf_from_prescription(
         psf /= psf.sum()
     return psf
 
-# Convolve with image to get retinal image.
 def blur_image(image: np.ndarray, psf: np.ndarray) -> np.ndarray:
     """
-    Convolve an image (HxW grayscale or HxWxC) with a PSF via FFT, Basically apply blur
+    Blur an image (H x W or H x W x C) with a PSF.
     """
     from scipy.signal import fftconvolve
     if image.ndim == 2:

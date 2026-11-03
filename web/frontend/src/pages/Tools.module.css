@@ -1,0 +1,8 @@
+.wrap { max-width: var(--wide-w); margin: 0 auto; padding: 40px 24px 80px; font-family: var(--sans); }
+.head h1 { font-family: var(--serif); font-size: 32px; margin: 0 0 8px; }
+.head p { color: var(--ink-2); max-width: 44em; font-size: 16px; }
+.tabs { display: flex; gap: 22px; margin: 18px 0 30px; flex-wrap: wrap; }
+.tabs a { padding: 4px 0; color: var(--ink-3); text-decoration: none; font-size: 14.5px; }
+.tabs a:hover { color: var(--ink); }
+.tabs a.on { color: var(--ink); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px; }
+@media (max-width: 640px) { .wrap { padding: 28px 16px 64px; } }

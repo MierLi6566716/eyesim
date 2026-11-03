@@ -1,8 +1,6 @@
 """
-Pre-distortion (vision-correcting) display pipeline.
-
-Given a prescription (S, C, axis), produce a display image that looks
-muffy to a normal eye but appears sharp to an eye with that prescription.
+Pre-blurs a screen image so an eye with a given prescription sees it sharp
+(it looks odd to everyone else).
 
 Physics:
 If the eye applies blur kernel h, and we display image d, the retinal image is:
@@ -31,15 +29,12 @@ from .optics import psf_from_prescription
 
 
 def _embed_psf(psf: np.ndarray, h: int, w: int) -> np.ndarray:
-    """Embed PSF in an h×w canvas with the PSF centre at (0,0) for FFT."""
+    """Put the PSF in an h x w canvas with its centre at (0, 0), for the FFT.
+    Works for odd and even kernel sizes."""
     ph, pw = psf.shape
-    ph2, pw2 = ph // 2, pw // 2
     psf_full = np.zeros((h, w))
-    psf_full[:ph2, :pw2]     = psf[ph2:, pw2:]
-    psf_full[:ph2, w-pw2:]   = psf[ph2:, :pw2]
-    psf_full[h-ph2:, :pw2]   = psf[:ph2, pw2:]
-    psf_full[h-ph2:, w-pw2:] = psf[:ph2, :pw2]
-    return psf_full
+    psf_full[:ph, :pw] = psf
+    return np.roll(psf_full, shift=(-(ph // 2), -(pw // 2)), axis=(0, 1))
 
 
 def _fft_blur(image: np.ndarray, psf: np.ndarray) -> np.ndarray:

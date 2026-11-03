@@ -5,3 +5,15 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+data/
+Miniconda3*.sh
+
+# web/
+web/frontend/node_modules/
+web/frontend/dist/
+web/backend/.env
+web/.env
+*.env
+!.env.example
+web/backend/_local_storage/
+web/backend/*.db

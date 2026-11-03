@@ -1,0 +1,109 @@
+:root {
+  /* Plain paper: white page, black ink, solid rules. Colour is reserved for data
+     (blue = signal, red = error/blur, green = corrected). */
+  --page: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0f0f0;
+  --rule: #cfcfcf;          /* chart gridlines and slider tracks only */
+  --rule-strong: #111111;
+
+  --ink: #111111;
+  --ink-2: #333333;
+  --ink-3: #6a6a6a;
+
+  --blue: #0b3fae;
+  --blue-soft: rgba(11, 63, 174, 0.12);
+  --red: #c4161c;
+  --red-soft: rgba(196, 22, 28, 0.12);
+  --green: #0a7a3d;
+  --green-soft: rgba(10, 122, 61, 0.14);
+
+  --serif: "STIX Two Text", "Times New Roman", Times, serif;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "Helvetica Neue", Helvetica, Arial, sans-serif; /* numeric read-outs; tabular figures set where used */
+  --code: Menlo, Consolas, "Courier New", monospace;
+
+  --radius: 2px;
+  --text-w: 680px;
+  --wide-w: 1080px;
+
+  /* Legacy names used by the backend tool pages. */
+  --bg: var(--page);
+  --bg-panel: var(--surface);
+  --bg-panel-raised: var(--surface-2);
+  --border: var(--ink-3);
+  --border-bright: var(--ink);
+  --fg: var(--ink);
+  --fg-dim: var(--ink-2);
+  --fg-faint: var(--ink-3);
+  --accent: var(--blue);
+  --accent-dim: var(--blue-soft);
+  --accent-2: var(--red);
+  --accent-2-dim: var(--red-soft);
+  --danger: var(--red);
+
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { margin: 0; min-height: 100%; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--ink); color: var(--page); }
+
+a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { color: var(--blue); }
+
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 700; line-height: 1.2; color: var(--ink); }
+
+p { margin: 0 0 1.1em; }
+
+code, .mono { font-family: var(--code); font-size: 0.82em; }
+
+.readout { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.label-caps {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+button {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 400;
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+button:hover:not(:disabled) { background: var(--surface-2); }
+button.primary { background: var(--ink); border-color: var(--ink); color: var(--page); }
+button.primary:hover:not(:disabled) { background: var(--ink-2); border-color: var(--ink-2); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.panel, .panel-raised { background: var(--surface); }
+
+.katex { font-size: 1.05em; }
+.katex-display { margin: 1.2em 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+}

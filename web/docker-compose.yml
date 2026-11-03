@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eyesim
+      POSTGRES_PASSWORD: eyesim
+      POSTGRES_DB: eyesim
+    ports:
+      - "5432:5432"
+    volumes:
+      - eyesim_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eyesim"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: web/backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://eyesim:eyesim@db:5432/eyesim
+      CORS_ORIGINS: '["http://localhost:5173"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/repo/web/backend/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  eyesim_pg_data:

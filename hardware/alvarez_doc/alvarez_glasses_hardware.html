@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alvarez Glasses Hardware</title>
+<style>
+  @page { size: Letter; margin: 18mm 17mm 18mm 17mm; }
+  :root {
+    --ink: #0b0b0b; --ink2: #52514e; --muted: #8a8984; --rule: #e4e3df;
+    --accent: #2a78d6; --warm: #eb6834; --green: #1baf7a; --paper: #ffffff; --tint: #f5f4f1;
+  }
+  html { background: var(--paper); }
+  body { font: 10.4pt/1.48 Georgia, "Times New Roman", serif; color: var(--ink); margin: 0; }
+  h1, h2, h3, .sans, table, figcaption, .callout, .meta { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  h1 { font-size: 23pt; line-height: 1.15; margin: 0 0 4pt; letter-spacing: -0.3px; }
+  h2 { font-size: 14pt; margin: 20pt 0 6pt; padding-top: 6pt; border-top: 1.5px solid var(--ink); break-after: avoid; }
+  h3 { font-size: 11pt; margin: 13pt 0 4pt; break-after: avoid; }
+  h2 .num { color: var(--accent); margin-right: 6pt; }
+  p { margin: 0 0 7pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 17pt; }
+  li { margin-bottom: 3pt; }
+  .meta { color: var(--ink2); font-size: 9.5pt; margin-bottom: 14pt; }
+  .subtitle { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 12.5pt; color: var(--ink2); margin-bottom: 8pt; }
+  .callout { background: var(--tint); border-left: 3px solid var(--accent); padding: 8pt 11pt; margin: 9pt 0 11pt; font-size: 9.6pt; line-height: 1.45; break-inside: avoid; }
+  .callout.warn { border-left-color: var(--warm); }
+  .callout b:first-child { display: block; margin-bottom: 2pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.9pt; margin: 6pt 0 11pt; break-inside: avoid; }
+  th { text-align: left; font-weight: 600; border-bottom: 1.5px solid var(--ink); padding: 4pt 6pt 4pt 0; vertical-align: bottom; }
+  td { border-bottom: 1px solid var(--rule); padding: 4pt 6pt 4pt 0; vertical-align: top; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  figure { margin: 10pt 0 12pt; break-inside: avoid; }
+  figure img, figure svg { width: 100%; display: block; }
+  figcaption { font-size: 8.8pt; color: var(--ink2); margin-top: 4pt; line-height: 1.4; }
+  figcaption b { color: var(--ink); }
+  .eq { font-family: "Menlo", "Courier New", monospace; font-size: 9.4pt; background: var(--tint); padding: 6pt 10pt; margin: 6pt 0 9pt; white-space: pre; line-height: 1.5; break-inside: avoid; }
+  code { font-family: "Menlo", "Courier New", monospace; font-size: 8.8pt; background: var(--tint); padding: 0 2pt; }
+  .refs { font-size: 8.6pt; line-height: 1.4; }
+  .refs li { margin-bottom: 3pt; }
+  .refs a { color: var(--accent); text-decoration: none; word-break: break-all; }
+  .pb { break-before: page; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
+  .tag { display: inline-block; font-family: -apple-system, Arial, sans-serif; font-size: 7.6pt; font-weight: 600; padding: 0 4pt; border-radius: 3px; border: 1px solid currentColor; }
+  .tag.v { color: var(--green); } .tag.a { color: var(--warm); }
+  .toc { font-family: -apple-system, Arial, sans-serif; font-size: 9.6pt; columns: 2; column-gap: 20pt; margin: 6pt 0 0; padding-left: 15pt; }
+</style>
+</head>
+<body>
+
+<h1>Self-refracting Alvarez glasses</h1>
+<div class="subtitle">How the optics, IR illumination, camera, CNN and actuator fit on a pair of glasses</div>
+<div class="meta">eyesim project · design note · 20 October 2026 · Research prototype, not a medical device</div>
+
+<div class="callout">
+<b>The short version</b>
+<ol style="margin:3pt 0 0">
+<li><b>Don't point a camera at the eye from the frame.</b> At 25&nbsp;mm with no optics in between, a 1&nbsp;D change in refraction changes the image by only about 2&nbsp;%. Viewing from 30° off axis also measures the wrong part of the eye: peripheral refraction differs from central refraction by 1–2&nbsp;D, differently in each person.</li>
+<li><b>Fold the light path and add a relay lens.</b> A hot mirror sends the IR sideways while visible light passes straight through. A lens with the camera stop at its focal plane (a Badal relay) makes a camera 50&nbsp;mm away behave like a photorefractor at optical infinity. This mapping is a 2×2 ray-transfer matrix, and it plugs straight into the existing simulator (Section 3).</li>
+<li><b>Measure through the Alvarez lens and drive the result to zero.</b> The camera sees the eye <i>plus</i> the lens, so the loop only has to reach "the reflex is neutral". Your imprecise knob then stops mattering. In simulation, a loop with a sloppy actuator gets 91&nbsp;% of eyes within 0.25&nbsp;D, against 42&nbsp;% when the dial is trusted (Section 7).</li>
+<li><b>Motorize the plates you already have and add a position encoder.</b> Characterize them first (Section 8). Buy custom plates only if they fail the checks there.</li>
+<li><b>Do everything in software first.</b> Then test on a commercial retinoscopy model eye (the Heine Skia), then on your own eye against an optometrist's refraction. No home-built model-eye bench.</li>
+</ol>
+</div>
+
+<ol class="toc">
+<li>What has to be true for this to work</li>
+<li>Why a camera on the frame fails</li>
+<li>The matrix transformation: relay optics</li>
+<li>Optical layout on the glasses</li>
+<li>IR illumination and camera</li>
+<li>Microcontroller and the CNN on it</li>
+<li>Closing the loop around a sloppy lens</li>
+<li>Your stripped Alvarez plates</li>
+<li>Which CNN, and what is actually novel</li>
+<li>Software-first plan, then real lenses</li>
+<li>Shopping list</li>
+<li>Risks and open questions</li>
+</ol>
+
+<h2><span class="num">1</span>What has to be true for this to work</h2>
+<p>Eccentric photorefraction works like this. An IR LED sits slightly off the camera's optical axis. Light reflected from the retina comes back through the pupil and only part of it re-enters the camera aperture. The resulting crescent of light across the pupil, its side, width and brightness gradient, encodes the eye's refraction relative to the camera. In the current code, this is <code>eyesim/photorefraction_rt.py</code>, after Chen, Tan &amp; Lewis [1]. Clinical photorefractors such as the PowerRefractor and Plusoptix work at about 1&nbsp;m [2, 3]. Three conditions decide whether this can be moved onto a glasses frame:</p>
+<ul>
+<li><b>Sensitivity.</b> The camera aperture must sit at a vergence close to the eye's far point. Otherwise a 1&nbsp;D change in the eye barely changes the reflex.</li>
+<li><b>On-axis viewing.</b> The measurement must be taken along (or within a few degrees of) the line of sight, because peripheral refraction is not central refraction.</li>
+<li><b>Known geometry.</b> The CNN needs the LED offset, aperture size and distance as inputs. On v2, leaving them out produced the M·D ambiguity, and the 10&nbsp;mm LED offset produced a dark zone covering 99&nbsp;% of typical eyes. This must also hold when the glasses slip on the nose.</li>
+</ul>
+
+<h2><span class="num">2</span>Why a camera on the frame fails</h2>
+<p>The obvious design puts a small IR camera and LED in the frame rim, 20–30&nbsp;mm from the eye, looking up at the pupil. This is how eye trackers such as NVGaze work [4]. It fails for refraction for two separate reasons.</p>
+<h3>2a. Too close: the null is at −40&nbsp;D</h3>
+<p>In the double-pass model, the reflex depends on the eye's refraction only through <code>(1 + d·M)</code>, where <code>d</code> is the camera distance. At d&nbsp;=&nbsp;370&nbsp;mm, a 1&nbsp;D change moves this by 37&nbsp;%. At d&nbsp;=&nbsp;25&nbsp;mm it moves by 2.5&nbsp;%. Row&nbsp;A of Figure&nbsp;1 shows the result: from −6 to +4&nbsp;D the frame hardly changes. A CNN could in principle read a 2&nbsp;%/D trend, but a 1&nbsp;mm slip of the glasses or a small LED drift changes the image by more than that.</p>
+
+<figure>
+<img src="figures/frames.png" alt="Simulated pupil frames for three optical layouts across refraction">
+<figcaption><b>Figure 1.</b> Simulated H-LED frames from the eyesim ray tracer for a 6&nbsp;mm pupil. <b>A</b>: bare camera on the frame (25&nbsp;mm, LED 2&nbsp;mm off axis); the image barely changes over 10&nbsp;D. <b>B</b>: hot mirror plus a 50&nbsp;mm Badal relay with one virtual LED 0.25&nbsp;mm from a 0.15&nbsp;mm stop. The crescent flips sides exactly at 0&nbsp;D (fully corrected). <b>C</b>: same relay with a graded line of three LEDs, which fills in the dark band near 0&nbsp;D. Generated by <code>hardware/alvarez_doc/make_figures.py</code>.</figcaption>
+</figure>
+
+<h3>2b. Off-axis: you would be measuring the wrong part of the eye</h3>
+<p>A camera on the lower rim views the eye 25–40° below the line of sight. Refraction is different there. Oblique astigmatism grows roughly with the square of the field angle. Peripheral refraction at 30° differs from foveal refraction by about −0.7 to −1.4&nbsp;D in double-pass measurements. In myopes it shifts in the opposite direction to emmetropes [5, 6]. A fixed correction (one matrix for everyone) cannot undo this, because the offset depends on the person. Even the PowerRefractor could not measure 15 subjects at 30° nasal [6].</p>
+<div class="callout warn"><b>Consequence</b>The camera has to look along the line of sight. With nothing in front of the eye, that is only possible by folding the light path with a mirror that is transparent to visible light, i.e. a hot mirror.</div>
+
+<h2><span class="num">3</span>The matrix transformation: relay optics</h2>
+<p>This is the useful matrix. Any paraxial optics between the eye's pupil and the camera stop (mirrors, a relay lens, the Alvarez plates) can be described by a ray-transfer matrix. In 1-D it is the 2×2 ABCD matrix. With astigmatism it is a 4×4 symplectic "ray transference" made of 2×2 blocks [7]. Writing the double-pass equation from <code>photorefraction_rt.py</code> with a general transference instead of free space gives:</p>
+<div class="eq">camera-plane position of a returning ray:   x_c = x_LED + G(p2) − G(p1)
+free space (current simulator):            G(p) = p + d·∇W(p)
+any relay  [x;θ]_cam = [A B; C D]·[x;θ]_pupil:   G(p) = A·p + B·∇W(p) = A·( p + (B/A)·∇W(p) )</div>
+<p>So <b>a relay is equivalent to a free-space photorefractor</b> with</p>
+<div class="eq">d_eq = B / A        ecc_eq = ecc / A        aperture_eq = aperture / A
+(4×4 astigmatic case: the null sits at refraction  F_null = −B⁻¹A,  a 2×2 power matrix)</div>
+<p>That gives three practical results:</p>
+<ul>
+<li><b>No new simulator is needed.</b> The CNN's existing geometry input <code>(d, ecc, pupil)</code> just takes the equivalent values. Only the angles <code>ecc/B</code> and <code>aperture/B</code>, as seen from the eye, and the vergence <code>A/B</code> matter.</li>
+<li><b>Badal configuration (stop at the relay's back focal plane, b&nbsp;=&nbsp;f):</b> A&nbsp;=&nbsp;0 and B&nbsp;=&nbsp;f. The camera sits at optical infinity. The null (neutral reflex) then falls exactly at full distance correction, and the calibration <i>does not depend on how far the glasses sit from the eye</i>, because B&nbsp;=&nbsp;f regardless. That handles frame slip. This is the same optometer principle autorefractors use [8].</li>
+<li><b>The oblique hot mirror and any curved coated surface</b> add a fixed astigmatic term to <code>A</code> and <code>B</code>. It appears as a constant offset matrix <code>−B⁻¹A</code>. Compute it from the design, then confirm it once with trial lenses (Section 10). It is fixed by the hardware, unlike the per-person peripheral-refraction error in 2b.</li>
+</ul>
+
+<table>
+<tr><th>Design quantity (f = 50 mm relay)</th><th>Angle seen from eye</th><th>Physical size at the stop</th><th>Equivalent at 1 m</th></tr>
+<tr><td>Camera stop (pinhole) radius</td><td class="n">1.5 mrad</td><td class="n">0.075 mm (150 µm pinhole)</td><td class="n">1.5 mm</td></tr>
+<tr><td>LED offsets, graded line per meridian</td><td class="n">2.5 / 5 / 10 mrad</td><td class="n">0.12 / 0.25 / 0.5 mm</td><td class="n">2.5 / 5 / 10 mm</td></tr>
+<tr><td>Source size (mask hole radius)</td><td class="n">1 mrad</td><td class="n">0.05 mm</td><td class="n">1 mm</td></tr>
+<tr><td>Pupil-plane resolution (diffraction, 850 nm)</td><td colspan="3">≈ 0.2–0.3 mm, about 25 resolvable elements across a 6 mm pupil, comparable to a 1 m photorefractor. 64×64 CNN input is enough.</td></tr>
+</table>
+<p>The 10&nbsp;mrad outer LED matches the "1&nbsp;m, 10&nbsp;mm offset" configuration that the geometry sweep found usable. The inner LEDs fill in the dark band around the null. Roorda et al. showed that extended or graded sources make the brightness slope across the pupil more linear [9]. Figure&nbsp;2 shows the signal for each layout.</p>
+
+<figure>
+<img src="figures/signal.png" alt="Crescent asymmetry and brightness versus refraction for three layouts">
+<figcaption><b>Figure 2.</b> Left: left–right asymmetry of the reflex. Its sign gives the direction of the error. The bare-frame camera (orange) never changes sign, and its slope is about 0.02 per dioptre. The relay layouts flip sign exactly at 0&nbsp;D. Right: total returned light. The single-LED relay (blue) still dims near the null. The graded line (green) does not, so there is no blind spot to get stuck in. Beyond about ±4&nbsp;D the asymmetry flattens, but its sign stays correct, and that is all the closed loop needs on its first step.</figcaption>
+</figure>
+
+<h2 class="pb"><span class="num">4</span>Optical layout on the glasses</h2>
+<p>Two layouts are proposed. Build the first. The second is the product direction, and needs a custom optical part.</p>
+
+<figure>
+<svg viewBox="0 0 880 360" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b3261e"/></marker>
+    <marker id="av" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8a8984"/></marker>
+  </defs>
+  <rect x="0" y="0" width="880" height="360" fill="#fbfaf8"/>
+  <text x="14" y="22" font-weight="700" font-size="12.5" fill="#0b0b0b">Prototype P1: clip-on measurement module, top view (right eye)</text>
+  <!-- world arrows -->
+  <line x1="200" y1="44" x2="200" y2="120" stroke="#8a8984" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#av)"/>
+  <text x="208" y="56" fill="#52514e">visible light from the world passes straight through</text>
+  <!-- hot mirror -->
+  <line x1="172" y1="168" x2="228" y2="112" stroke="#1baf7a" stroke-width="4"/>
+  <text x="56" y="132" fill="#0b0b0b" font-weight="600">hot mirror</text>
+  <text x="56" y="146" fill="#52514e">25 mm, 45°, reflects</text>
+  <text x="56" y="160" fill="#52514e">850 nm, passes visible</text>
+  <!-- alvarez plates -->
+  <rect x="150" y="190" width="100" height="7" fill="#2a78d6" opacity="0.85"/>
+  <rect x="158" y="200" width="100" height="7" fill="#2a78d6" opacity="0.55"/>
+  <text x="40" y="199" fill="#0b0b0b" font-weight="600">Alvarez pair</text>
+  <text x="40" y="213" fill="#52514e">plates slide sideways</text>
+  <line x1="262" y1="203" x2="290" y2="203" stroke="#2a78d6" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="294" y="207" fill="#2a78d6">actuator + encoder</text>
+  <!-- eye -->
+  <circle cx="200" cy="285" r="44" fill="#fff" stroke="#0b0b0b" stroke-width="1.5"/>
+  <path d="M176,246 Q200,232 224,246" fill="none" stroke="#0b0b0b" stroke-width="1.5"/>
+  <rect x="186" y="241" width="28" height="4" fill="#0b0b0b"/>
+  <text x="120" y="340" fill="#52514e">eye (pupil ≈ 12–15 mm behind the plates)</text>
+  <!-- IR path -->
+  <line x1="200" y1="240" x2="200" y2="142" stroke="#b3261e" stroke-width="2"/>
+  <line x1="200" y1="140" x2="455" y2="140" stroke="#b3261e" stroke-width="2" marker-end="url(#ar)"/>
+  <!-- relay lens -->
+  <ellipse cx="330" cy="140" rx="6" ry="22" fill="#d9e8f8" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="300" y="104" fill="#0b0b0b" font-weight="600">relay lens f = 50 mm</text>
+  <text x="300" y="118" fill="#52514e">(achromat or aspheric)</text>
+  <!-- fold mirror -->
+  <line x1="448" y1="125" x2="478" y2="155" stroke="#52514e" stroke-width="4"/>
+  <text x="488" y="132" fill="#0b0b0b" font-weight="600">fold mirror</text>
+  <text x="488" y="146" fill="#52514e">turns the path back along the temple</text>
+  <line x1="463" y1="142" x2="463" y2="222" stroke="#b3261e" stroke-width="2" marker-end="url(#ar)"/>
+  <!-- beam splitter + LED + stop + camera -->
+  <rect x="448" y="226" width="30" height="30" fill="#eef4fb" stroke="#2a78d6" stroke-width="1.2"/>
+  <line x1="448" y1="256" x2="478" y2="226" stroke="#2a78d6" stroke-width="1"/>
+  <rect x="510" y="232" width="18" height="18" fill="#eb6834"/>
+  <line x1="508" y1="241" x2="482" y2="241" stroke="#eb6834" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="536" y="236" fill="#0b0b0b" font-weight="600">850 nm LEDs behind a hole mask</text>
+  <text x="536" y="250" fill="#52514e">virtual offsets 0.12 / 0.25 / 0.5 mm (H and V lines)</text>
+  <line x1="452" y1="270" x2="474" y2="270" stroke="#0b0b0b" stroke-width="3"/>
+  <text x="536" y="274" fill="#0b0b0b" font-weight="600">150 µm stop at the relay focal plane</text>
+  <text x="536" y="288" fill="#52514e">(Badal: B = f, calibration independent of frame slip)</text>
+  <line x1="463" y1="258" x2="463" y2="292" stroke="#b3261e" stroke-width="2"/>
+  <rect x="446" y="294" width="34" height="26" rx="3" fill="#0b0b0b"/>
+  <text x="536" y="312" fill="#0b0b0b" font-weight="600">global-shutter NIR camera, focused on the pupil</text>
+  <text x="536" y="326" fill="#52514e">crossed polarisers on LED and camera suppress plate glints</text>
+  <!-- temple -->
+  <rect x="440" y="160" width="4" height="180" fill="#c9c7c0"/>
+  <text x="376" y="352" fill="#52514e">temple arm → ear; MCU and battery further back</text>
+</svg>
+<figcaption><b>Figure 3.</b> Prototype P1. The IR path starts at the eye, passes through the Alvarez plates (so the camera measures eye&nbsp;+&nbsp;lens), reflects off a 45° hot mirror, and goes through a 50&nbsp;mm relay and a fold mirror to a pinhole stop. LEDs are injected through a small beam splitter so they appear a fraction of a millimetre from the stop. The module is front-mounted and protrudes about 20&nbsp;mm. Weight is acceptable for a bench-worn prototype, not for all-day wear. Mirror image for the left eye.</figcaption>
+</figure>
+
+<h3>P1: clip-on module (build this)</h3>
+<ul>
+<li><b>Where it mounts:</b> on the front of the frame, temple side, as a 3D-printed housing (SLA resin, matte black inside) clamped to the rim and the hinge. Include a mechanical stop so it always clicks into the same position. Thanks to the Badal relay, small slips along the line of sight don't change the calibration. Sideways slip shifts the pupil in the image, and the network already handles that.</li>
+<li><b>Path length:</b> about 15&nbsp;mm from the eye to the hot mirror, then 50&nbsp;mm through the relay to the stop. Folding it along the temple keeps the module about 20&nbsp;mm deep instead of 70&nbsp;mm long.</li>
+<li><b>Why the hot mirror goes outside the plates:</b> the eye-to-lens gap (about 12&nbsp;mm) is too small for a 45° mirror. Placing it outside also means the camera sees the eye <i>through</i> the Alvarez lens, which makes the zeroing loop in Section 7 possible.</li>
+<li><b>Glints:</b> the plates have four surfaces, each reflecting about 4&nbsp;% of the LED light. That is far brighter than the retinal reflex. Use both of these: (1) tilt the plates 4–6° relative to the measurement axis (pantoscopic tilt, which glasses already have) so the specular reflections land outside the 150&nbsp;µm stop; (2) a linear polariser on the LED and a crossed analyser on the camera. The fundus partly depolarises light, so the reflex survives at reduced strength. Model both in the simulator before relying on them.</li>
+</ul>
+<h3>P2: integrated version (the product direction)</h3>
+<p>Replace the 45° plate with a <b>powered hot-mirror coating or holographic optical element (HOE)</b> on the outer surface of the front plate. It acts as the combiner and the Badal relay at once. The camera sits at its focal point near the hinge. Patent literature describes hot-mirror films with over 90&nbsp;% NIR reflectivity at 30° incidence and under 1&nbsp;% visible reflectivity [10]. The costs: in P2 the IR passes through the plates twice, and the coating is a custom part. The 4×4 transference model from Section 3 handles the double pass, because it is just another known matrix that depends on the plate offset. Don't start here.</p>
+
+<h2><span class="num">5</span>IR illumination and camera</h2>
+<table>
+<tr><th style="width:24%">Item</th><th>Recommendation</th><th style="width:27%">Why</th></tr>
+<tr><td>Wavelength</td><td>850 nm LEDs, pulsed in sync with the camera's global shutter</td><td>Good silicon sensitivity and invisible enough. Labels then need the 0.69 D IR→visible shift (<code>ir_to_visible</code>).</td></tr>
+<tr><td>LED pattern</td><td>Two graded lines (H and V meridians), 3 sources each, at 0.12 / 0.25 / 0.5 mm from the stop centre. Add a 45° line if J45 accuracy is poor.</td><td>Removes the dark zone (Figures 1–2) and gives brightness slopes along each meridian. This follows the PowerRefractor's LED-array idea [2, 9].</td></tr>
+<tr><td>How to place sources 0.1 mm apart</td><td>A chrome-on-glass or high-resolution film photomask with 100 µm holes, back-lit by one LED per line, on the side port of a 5–10 mm beam-splitter cube</td><td>Physical LEDs are about 1 mm across. The mask creates <i>virtual</i> point sources at any offset.</td></tr>
+<tr><td>Camera (P1)</td><td>A small monochrome global-shutter module with good NIR response, e.g. OV9281- or OV7251-class boards (MIPI or USB)</td><td>Global shutter freezes the eye during short LED pulses. Monochrome gives the most NIR signal.</td></tr>
+<tr><td>Camera (P2)</td><td>OmniVision OVM6211 CameraCubeChip: 400×400, 120 fps, global shutter, about 3.2×3.2×3.9 mm, made for eye tracking [11]</td><td>Small enough for a hinge. Check it is still in production.</td></tr>
+<tr><td>Gaze and accommodation gating</td><td>Use the same IR frames to find the pupil centre. Only accept frames when the pupil is centred, i.e. the user is looking along the measurement axis. For a distance prescription, keep the <i>most hyperopic</i> stable reading over a window.</td><td>Accommodation only ever makes the eye more myopic, so the least myopic reading is the far point [8].</td></tr>
+<tr><td>Eye safety</td><td>Pulse only during exposures. Measure corneal irradiance with an optical power meter at the eye position. Design to the IEC 62471 exempt group with margin, and get a lab check before anyone wears it for long.</td><td>IEC 62471 sets separate corneal and retinal thermal limits for 780–3000 nm, and near-eye geometry is the worst case [12].</td></tr>
+</table>
+
+<h2><span class="num">6</span>Microcontroller and the CNN on it</h2>
+<div class="two">
+<div>
+<h3>Prototype: tethered</h3>
+<p>Run the camera over a thin cable to a <b>Raspberry Pi 5</b> or your laptop, clipped to your belt or sitting on the desk. The Pi drives the LEDs (GPIO, via a MOSFET) and the actuator driver. It runs the CNN in PyTorch or ONNX Runtime, so you iterate on the network without embedded work. The current PupilNet (~450k parameters, 64×64 input) runs comfortably in real time on a Pi. That is an estimate; measure it on your own Pi.</p>
+</div>
+<div>
+<h3>Wearable: STM32N6 in the temple</h3>
+<p>The <b>STM32N6</b> has a Neural-ART NPU rated at up to 600&nbsp;GOPS, a MIPI CSI-2 camera input and an ISP [13]. In other words, camera in, CNN out, on one chip. Develop on the ST N6 Discovery kit. Export with <code>torch → ONNX → ST Edge AI</code>, using INT8 quantization-aware training. The alternative is the <b>MAX78000</b>: very low power, 442&nbsp;KB of weight memory (up to 3.5M weights at 1-bit) and a parallel camera interface [14]. PupilNet at 8-bit only just fits, so it is a stretch target.</p>
+</div>
+</div>
+<p><b>Where things go on the frame:</b> MCU board and motor driver in the camera-side temple, just behind the hinge. LiPo cell in the other temple for balance. A flex cable through the hinge. A single button: "measure now". Duty cycle: the device measures on demand or every few seconds, not continuously, which keeps the LEDs, the NPU and the battery mostly idle.</p>
+
+<h2><span class="num">7</span>Closing the loop around a sloppy lens</h2>
+<p>Your knob is imprecise, and so is any small motor with backlash. That only matters if the system <b>trusts the actuator's position</b>. In P1 the camera measures the eye <i>through</i> the Alvarez lens, so each frame reports the <b>residual</b> error: what is left after the lens. The controller repeats one cycle:</p>
+<div class="eq">1. measure the residual r̂  (CNN, average of 4 frames)
+2. if |r̂| &gt; 0.12 D: move the plates by −0.8·r̂
+3. go to 1</div>
+<p>With the Badal relay the null is exactly "corrected", so the loop reaches the right answer without ever knowing the lens power. Figure&nbsp;4 simulates this with an actuator that has a ±20&nbsp;% unknown gain, a 0.25&nbsp;D unknown offset, 0.3&nbsp;D backlash and 0.08&nbsp;D jitter, and a CNN with 0.1&nbsp;D per-frame noise and a ±10&nbsp;% scale error.</p>
+<figure>
+<img src="figures/closed_loop.png" alt="Closed-loop convergence and final residual histogram">
+<figcaption><b>Figure 4.</b> 300 simulated eyes from −6 to +4&nbsp;D. Closed loop: median residual 0.09&nbsp;D after 5 iterations, 91&nbsp;% within 0.25&nbsp;D. Open loop (measure once, set the dial, trust it): median 0.32&nbsp;D, 42&nbsp;% within 0.25&nbsp;D. The noise and actuator numbers are assumptions, not measurements of your hardware.</figcaption>
+</figure>
+<p>This also changes what the CNN has to do. It needs the right <b>sign</b> everywhere and the right <b>magnitude near zero</b>. It no longer needs accurate absolute dioptres at −6&nbsp;D. That is a much easier problem, and much more robust to the sim-to-real gap. Reporting the prescription still needs one absolute number: the lens power at convergence. That comes from the plate position encoder plus the one-time lensmeter calibration from Section 8, not from the knob.</p>
+
+<h2><span class="num">8</span>Your stripped Alvarez plates</h2>
+<p>Consumer adjustable glasses use the Alvarez principle: two plates with matching cubic surfaces, <code>t = A(xy² + x³/3)</code>. Sliding them sideways by ±d gives power <code>P = 4(n−1)A·d</code> (Alvarez 1967) [15]. The known weaknesses are poor off-axis image quality and sphere-only correction [16]. Characterize the plates before deciding anything.</p>
+<h3>Characterize (1–2 days, cheap)</h3>
+<ol>
+<li><b>Power vs offset.</b> Mount one plate fixed and the other on a micrometer translation stage. At 7–9 offsets across the range, read the power with a lensmeter. A used manual one is fine, or an optician will often measure for free. Fit <code>P = k·d + P₀</code>. The gain <code>k</code> (D/mm) sets your actuator precision: 0.125&nbsp;D ÷ k. At a plausible k of 4–6&nbsp;D/mm, that is 20–30&nbsp;µm.</li>
+<li><b>Unwanted cylinder.</b> At each offset, note any cylinder the lensmeter shows, both at the centre and 5&nbsp;mm off centre. Under 0.25&nbsp;D over the central 10&nbsp;mm is good.</li>
+<li><b>850 nm transmission.</b> Shine your IR LED through the plate onto the camera and compare with no plate. Over 80&nbsp;% is fine. Some coatings and tints absorb NIR.</li>
+<li><b>Surface reflections.</b> With the LED and camera roughly where they will sit in P1, image the glints, then try the plate tilt and crossed polarisers.</li>
+<li><b>Gap and wobble.</b> Measure how much the gap and tilt between the plates change across the slide. That is a source of power error the encoder can't see, so the closed loop has to absorb it.</li>
+</ol>
+<h3>Motorize: replace the knob, keep the plates</h3>
+<ul>
+<li><b>Actuator:</b> a micro linear stepper with a lead screw (cheap, a few mm stroke) driven by a small stepper driver. Or, for a cleaner product path, a piezo SQUIGGLE-type micro motor: about 2.8×2.8×6&nbsp;mm, 6&nbsp;mm travel, 0.5&nbsp;µm resolution [17].</li>
+<li><b>Position sensor on the moving plate, not on the motor:</b> a magnetic linear encoder (a multipole magnetic strip plus a sensor chip, sub-micron resolution) or New Scale's TRACKER-type sensor [17]. Measuring the plate directly bypasses all backlash in gears and knob. Together with the lensmeter fit, this gives the absolute power for the report.</li>
+<li><b>Mechanics:</b> keep the original rails if they are smooth. Add a light preload spring so the plate never floats inside the backlash.</li>
+</ul>
+<h3>Do you need better Alvarez lenses?</h3>
+<table>
+<tr><th>If the characterization shows…</th><th>Then…</th></tr>
+<tr><td>Range ≥ ±4 D, less than 0.25 D unwanted cylinder over the central 10 mm, good IR transmission</td><td><b>Keep them</b> for P1. All the risk is in sensing, not in the lens.</td></tr>
+<tr><td>Strong off-centre astigmatism or a large plate gap</td><td>Commission <b>optimized freeform plates</b>. Barbero and others showed that optimized Alvarez surfaces keep power and astigmatism uniform across the field; one design covers −10 to +2 D [16]. Diamond-turned PMMA prototype shops (e.g. Syntec Optics, Diverse Optics) or 3D-printed freeforms for quick iterations [18]. Expect hundreds to a few thousand dollars per pair; get quotes.</td></tr>
+<tr><td>You want to correct astigmatism</td><td>Add a <b>second, astigmatic Alvarez pair</b> per eye (<code>t = A(x³/3 − xy²)</code>, already in <code>web/frontend/src/lib/alvarez.ts</code>): 4 plates and 2–3 actuators. Do this after sphere-only works.</td></tr>
+<tr><td>Alvarez mechanics become the bottleneck</td><td>Electrically tunable liquid lenses (as used in Autofocals [19] and by Hasan et al. [20]) have no moving plates, but no cylinder either.</td></tr>
+</table>
+
+<h2><span class="num">9</span>Which CNN, and what is actually novel</h2>
+<p><b>Keep a small CNN.</b> Don't move to a transformer or a big backbone. The input is a 64×64 IR image, the training data is synthetic and unlimited, and the model has to run INT8 on a microcontroller. The v2 report showed the errors come from missing information (the dark zone), not from the model being too small. Recommended v3:</p>
+<ul>
+<li><b>Backbone:</b> a small ResNet-style network (0.5–2M parameters), with no stride-2 first layer (the crescent edge is a few pixels wide) and <b>CoordConv</b> x/y channels plus a pupil mask, because crescent <i>position</i> is the signal [21].</li>
+<li><b>Geometry conditioning with FiLM:</b> the equivalent geometry from Section 3 (θ<sub>e</sub>, θ<sub>a</sub>, vergence A/B, pupil radius) scales and shifts each stage's features, instead of being concatenated at the end [22].</li>
+<li><b>Output a mean and an uncertainty</b> for each of M, J0, J45, trained with a Gaussian negative log-likelihood [23]. Optionally use a small ensemble [24]. The controller then knows when not to trust a frame.</li>
+<li><b>Inputs:</b> stacked frames: the H and V LED lines × 2–3 small lens dithers (e.g. current position ±0.5 D).</li>
+</ul>
+<p><b>What is novel isn't the backbone.</b> In this literature search, nobody has published a wearable that both <i>measures</i> refraction and drives its own tunable lens from that measurement. Autofocals used a separate autorefractor [19]. The closed-loop tunable-lens patents describe handheld or tabletop instruments [25]. Three contributions would be genuinely new:</p>
+<ol>
+<li><b>Active photorefraction.</b> The tunable lens is part of the sensor. Small known dithers give the network differential images, which removes most of the remaining ambiguity.</li>
+<li><b>Null-seeking control with uncertainty.</b> The Section 7 loop driven by a calibrated uncertainty, with a provable convergence condition (the sign of the residual must be correct).</li>
+<li><b>Self-calibration by simulation-based inference</b> [26]. Port the ray tracer to PyTorch. On a new unit, fit its few unknown geometry parameters (stop size, LED offsets, glint pattern) by comparing a handful of real frames with rendered ones, then fine-tune. This is the principled answer to the sim-to-real gap.</li>
+</ol>
+<p>Do a proper prior-art and patent search before claiming novelty. The summary above comes from a limited literature search.</p>
+
+<h2><span class="num">10</span>Software-first plan, then real lenses</h2>
+<h3>Phase S: software only</h3>
+<ol>
+<li><b>Simulator:</b> add a <code>Relay</code> transference (Section 3) and the Alvarez lens as a thin lens in the path, plus graded LED lines, plate glints and polarisation leakage, pupil decentration from gaze, and an accommodation range. Regenerate the dataset (about 150k samples first).</li>
+<li><b>CNN v3:</b> as in Section 9. Track it with <code>scripts/report.py</code>. Target: correct sign on more than 99&nbsp;% of frames, and residual error under 0.25&nbsp;D for |residual| &lt; 1&nbsp;D.</li>
+<li><b>Closed-loop twin:</b> run the CNN in the Section 7 loop with the actuator model (backlash, gain error, encoder noise). Extend <code>eyesim/pipeline.py</code>.</li>
+<li><b>Embedded check:</b> INT8 export, and confirm accuracy holds after quantization.</li>
+</ol>
+<h3>Phase H: real Alvarez lens, without a home-built bench</h3>
+<ol>
+<li><b>Lens:</b> lensmeter calibration of your motorized plates (Section 8).</li>
+<li><b>Calibrated eye:</b> a commercial retinoscopy trainer such as the <b>Heine Skia</b>. It has a metal body, a 2–8&nbsp;mm variable pupil, a cylinder axis scale, a holder for trial lenses, and a 32&nbsp;mm achromat [27]. It is built to produce exactly the retinal reflex that photorefraction reads, and its refraction is set on a scale, so it is a certified label source rather than a rig you build and calibrate. Add a trial lens set for cylinder. Use it to check the oblique-path offset matrix <code>−B⁻¹A</code> and the glint suppression.</li>
+<li><b>Your own eye:</b> get a cycloplegic or careful subjective refraction from an optometrist. Then wear P1, fixate a target 6&nbsp;m away, run the loop, and compare the converged lens power with the prescription. Repeat on several days to measure repeatability.</li>
+<li><b>Fine-tune</b> only after measuring the sim-to-real gap, using the self-calibration in Section 9, item 3.</li>
+</ol>
+
+<h2><span class="num">11</span>Shopping list (prices are rough; verify with vendors)</h2>
+<table>
+<tr><th>Item</th><th>Purpose</th><th class="n">Rough cost</th></tr>
+<tr><td>Hot mirror, 25 mm, 45° (Edmund/Thorlabs class)</td><td>Folds the IR path, passes visible</td><td class="n">$50–150</td></tr>
+<tr><td>Relay achromat f = 50 mm, small fold mirror, 5–10 mm beam-splitter cube</td><td>Badal relay and LED injection</td><td class="n">$150–300</td></tr>
+<tr><td>150 µm precision pinhole; custom photomask (100 µm holes)</td><td>Camera stop and virtual LEDs</td><td class="n">$100–250</td></tr>
+<tr><td>850 nm LEDs, sheet polariser film</td><td>Illumination, glint suppression</td><td class="n">$30–60</td></tr>
+<tr><td>Global-shutter NIR mono camera module</td><td>P1 sensor</td><td class="n">$50–150</td></tr>
+<tr><td>Raspberry Pi 5 (prototype); STM32N6 Discovery kit (wearable)</td><td>Compute</td><td class="n">$80 + ~$200</td></tr>
+<tr><td>Micro linear stepper + driver, or piezo micro motor; magnetic linear encoder</td><td>Motorized plates with absolute position</td><td class="n">$30–400</td></tr>
+<tr><td>Micrometer translation stage</td><td>Plate characterization</td><td class="n">$50–200</td></tr>
+<tr><td>Manual lensmeter (used)</td><td>Absolute lens calibration</td><td class="n">$150–500</td></tr>
+<tr><td>Heine Skia retinoscope trainer + trial lens set</td><td>Calibrated eye for Phase H</td><td class="n">~$610–740 + $100–300</td></tr>
+<tr><td>Optical power meter (NIR)</td><td>Eye-safety measurement</td><td class="n">$100–400</td></tr>
+<tr><td>SLA 3D printing (housing)</td><td>Clip-on module</td><td class="n">$20–100</td></tr>
+</table>
+
+<h2><span class="num">12</span>Risks and open questions</h2>
+<ul>
+<li><b>Glints through the plates</b> could be stronger than the simulator suggests. Test tilt plus crossed polarisers early, on the bench, with the real plates (Phase H step 1).</li>
+<li><b>Light budget:</b> a 150&nbsp;µm stop collects little light. Real 1&nbsp;m photorefractors work at similar angular apertures, so it should be feasible, but confirm signal-to-noise against the eye-safety limits.</li>
+<li><b>Gaze:</b> measurements are only valid when looking along the module axis. Gating on the pupil centre handles this, but it lowers the measurement rate.</li>
+<li><b>Accommodation:</b> a young user's eye fluctuates by ±0.25–0.5&nbsp;D. Use far fixation and the most-hyperopic-stable reading.</li>
+<li><b>The relay result is first-order (paraxial).</b> The figures assume ideal thin optics. Real aberrations of a 50&nbsp;mm achromat used near-axis are small, but put the real prescription into the simulator before ordering parts.</li>
+</ul>
+<p class="sans" style="font-size:8.8pt;color:#52514e"><span class="tag v">verified</span> Figures 1, 2 and 4 come from the eyesim ray tracer and the scripts in this folder. The relay equivalence follows algebraically from the double-pass equation. <span class="tag a">not yet verified</span> Glint suppression, light budget, actuator numbers, prices, and all hardware behaviour.</p>
+
+<h2>References</h2>
+<ol class="refs">
+<li>Chen, Tan &amp; Lewis, "Simulation of eccentric photorefraction images," Optics Express 11(14), 2003. (Basis of <code>eyesim/photorefraction_rt.py</code>.)</li>
+<li>Choi, Weiss, Schaeffel et al., PowerRefractor laboratory, clinical and kindergarten validation, Optom. Vis. Sci. 2000. <a href="https://busqueda.bvsalud.org/portal/resource/es/mdl-11100892">bvsalud.org/mdl-11100892</a>; calibration issues: Bharadwaj et al., JOSA A 30, 923 (2013) <a href="https://www.doi.org/10.1364/JOSAA.30.000923">doi:10.1364/JOSAA.30.000923</a>; population factors: <a href="https://link.springer.com/article/10.1038/srep07976">Sci. Rep. 5, 7976</a></li>
+<li>Plusoptix accuracy in children (Leiden): <a href="https://scholarlypublications.universiteitleiden.nl/access/item%3A3635735/download">universiteitleiden.nl</a>; A09 study: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4888737">PMC4888737</a></li>
+<li>Kim et al., "NVGaze: An Anatomically-Informed Dataset for Low-Latency, Near-Eye Gaze Estimation," CHI 2019. <a href="https://research.nvidia.com/labs/amri/publication/kim2019">research.nvidia.com</a></li>
+<li>Atchison, Pritchard &amp; Schmid, "Peripheral refraction along the horizontal and vertical visual fields in myopia," Vision Res. 2006; summary in Lundström 2005, <a href="https://www.aphys.kth.se/polopoly_fs/1.489974.1600689546!/Lundstr%C3%B6m-2005-Optom.%20Vis.%20Sci.pdf">aphys.kth.se</a></li>
+<li>Peripheral refraction validity and instrument comparison: <a href="https://publications.aston.ac.uk/id/eprint/28950">publications.aston.ac.uk/28950</a>; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3235528">PMC3235528</a></li>
+<li>W. F. Harris, linear optics of the eye and the 4×4 symplectic ray transference. <a href="https://avehjournal.org/index.php/aveh/article/view/348/605">avehjournal.org</a>; <a href="https://pure.uj.ac.za/en/publications/quantitative-analysis-of-eyes-and-other-optical-systems-in-linear/">pure.uj.ac.za</a></li>
+<li>Optometer (Badal) principle and autorefractors: Univ. of Arizona Visual Optics Lab notes <a href="https://wp.optics.arizona.edu/visualopticslab/wp-content/uploads/sites/52/2021/08/Class03_21-Optometer-Fogging.pdf">optics.arizona.edu</a>; StatPearls <a href="https://ncbi.nlm.nih.gov/books/NBK580520">NBK580520</a></li>
+<li>Roorda, Campbell &amp; Bobier, "Slope-based eccentric photorefraction: theoretical analysis of different light source configurations," JOSA A 14, 2547 (1997). <a href="https://doi.org/10.1364/josaa.14.002547">doi:10.1364/josaa.14.002547</a></li>
+<li>Hot-mirror eye-tracking film specification (US patent). <a href="https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/10877556">USPTO 10877556</a></li>
+<li>OmniVision OVM6211 product brief. <a href="https://ovt.com/wp-content/uploads/2024/08/OVM6211-PB-v1.7-WEB.pdf">ovt.com</a></li>
+<li>IEC 62471 photobiological safety of lamps; IR-LED application notes: <a href="https://dammedia.osram.info/media/bin/osram-dam-2496608/AN002_Details%20on%20photobiological%20safety%20of%20LED%20light%20sources.pdf">OSRAM AN002</a>, <a href="https://www.vishay.com:443/docs/81935/eyesafe.pdf">Vishay</a></li>
+<li>STMicroelectronics STM32N6. <a href="https://st.com/stm32n6">st.com/stm32n6</a>; <a href="https://blog.st.com/?p=42931">ST blog</a></li>
+<li>Analog Devices MAX78000 datasheet. <a href="https://www-cce.cldnet.analog.com/media/en/technical-documentation/data-sheets/MAX78000.pdf">analog.com</a></li>
+<li>L. W. Alvarez, US Patent 3,305,294 (1967), "Two-element variable-power spherical lens."</li>
+<li>Adjustable-focus eyeglasses patents (off-axis limitations): <a href="https://patents.google.com/patent/US7325922">US7325922</a>, <a href="https://patents.google.com/patent/US10302967">US10302967</a>; optimized Alvarez design (−10 to +2 D), citing Barbero: Chinese Optics Letters 16(7), 072201 (2018)</li>
+<li>New Scale Technologies SQUIGGLE motor and TRACKER sensor. <a href="https://vision-systems.com/cameras-accessories/image-sensors/article/16736712/tiny-motors-squiggle-into-camera-designs">vision-systems.com</a>; <a href="https://cdn.eicom.ru/media/PDF/4162744.pdf">datasheet</a></li>
+<li>Freeform/Alvarez fabrication: <a href="https://par.nsf.gov/biblio/10097967-precision-glass-molding-freeform-optics">par.nsf.gov</a>; <a href="https://dgao-proceedings.de/paper/113-b35?lang=en">Optimized tunable Alvarez-Lohmann lenses (DGaO)</a>; <a href="https://www.photonics.com/c14459/Syntec_Optics?PRID=61835">Syntec Optics</a></li>
+<li>Padmanaban et al., "Autofocals: Evaluating gaze-contingent eyeglasses for presbyopes," Science Advances 2019. <a href="https://www.science.org/doi/10.1126/sciadv.aav6187">doi:10.1126/sciadv.aav6187</a></li>
+<li>Hasan, Banerjee, Kim &amp; Mastrangelo, "Tunable-focus lens for adaptive eyeglasses," Optics Express 25(2), 1221 (2017). doi:10.1364/OE.25.001221</li>
+<li>Liu et al., "An intriguing failing of convolutional neural networks and the CoordConv solution," NeurIPS 2018.</li>
+<li>Perez et al., "FiLM: Visual Reasoning with a General Conditioning Layer," AAAI 2018.</li>
+<li>Kendall &amp; Gal, "What Uncertainties Do We Need in Bayesian Deep Learning for Computer Vision?" NeurIPS 2017.</li>
+<li>Lakshminarayanan et al., "Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles," NeurIPS 2017.</li>
+<li>Tunable-lens-based refractive examination (closed-loop wavefront and tunable lens, handheld). <a href="https://patents.google.com/patent/WO2017218539A1/en">WO2017218539A1</a></li>
+<li>Cranmer, Brehmer &amp; Louppe, "The frontier of simulation-based inference," PNAS 2020.</li>
+<li>HEINE Skia / Retinoscope Trainer. <a href="https://shop.heine.com/us-en/HEINE-Skia-Retinoscope-Trainer/233144">shop.heine.com</a></li>
+</ol>
+</body>
+</html>

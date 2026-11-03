@@ -1,0 +1,159 @@
+import { useDeferredValue, useMemo, useState } from "react";
+import { FieldCanvas } from "../components/FieldCanvas";
+import { Readout } from "../components/Article";
+import { Slider } from "../components/Slider";
+import {
+  ARCMIN_PER_PX, computePsf, convolve, predistort, sharpness, toPowerVector, wavefrontWaves,
+} from "../lib/optics";
+import { diverging, gray, letterChart, viridis } from "../lib/images";
+import { EyeControls, type Eye } from "./EyeControls";
+import styles from "./figures.module.css";
+
+const N_IMG = 256;
+let chartCache: Float64Array | null = null;
+function chart() {
+  if (!chartCache) chartCache = letterChart(N_IMG);
+  return chartCache;
+}
+
+const logT = (v: number) => Math.log10(Math.max(v, 1e-3));
+
+function useOptics(eye: Eye) {
+  const d = useDeferredValue(eye);
+  return useMemo(() => {
+    const pv = toPowerVector(d.S, d.C, d.axis);
+    const wf = wavefrontWaves(pv, d.pupil, 128);
+    let wmax = 0;
+    for (const v of wf) if (!Number.isNaN(v)) wmax = Math.max(wmax, Math.abs(v));
+    const psf = computePsf(pv, d.pupil);
+    const img = chart();
+    const retina = convolve(img, N_IMG, psf.kernel, psf.K);
+    return { pv, wf, wmax, psf, img, retina };
+  }, [d]);
+}
+
+function ColorScale({ map, lo, hi }: { map: (t: number) => [number, number, number]; lo: string; hi: string }) {
+  const stops = Array.from({ length: 9 }, (_, i) => {
+    const [r, g, b] = map(i / 8);
+    return `rgb(${r},${g},${b}) ${(i / 8) * 100}%`;
+  }).join(",");
+  return (
+    <div className={styles.scale}>
+      <span>{lo}</span>
+      <span className={styles.scaleBar} style={{ background: `linear-gradient(90deg, ${stops})` }} />
+      <span>{hi}</span>
+    </div>
+  );
+}
+
+const divMap = (t: number) => diverging(t * 2 - 1);
+
+/** Figure: prescription → wavefront → PSF → retinal image. */
+export function OpticsChainFigure({ eye, onChange }: { eye: Eye; onChange: (e: Eye) => void }) {
+  const o = useOptics(eye);
+  const w = Math.max(o.wmax, 0.25);
+  const acuityLine = snellenLimit(o.psf.blurArcmin);
+  return (
+    <div className={styles.split}>
+      <div>
+        <EyeControls eye={eye} onChange={onChange} />
+        <div className={styles.readouts}>
+          <Readout label="Peak wavefront error" value={o.wmax.toFixed(1)} unit="λ" />
+          <Readout label="Geometric blur ⌀" value={o.psf.blurArcmin.toFixed(1)} unit="arcmin" tone="red" />
+          <Readout label="Smallest legible row ≈" value={acuityLine} />
+        </div>
+      </div>
+      <div>
+        <div className={styles.triptych}>
+          <div className={styles.pane}>
+            <div className={styles.paneHead}>
+              <span className={styles.paneTitle}><span className={styles.step}>a</span>Pupil wavefront W(x,y)</span>
+            </div>
+            <div className={styles.canvasFrame} style={{ background: "transparent", outline: "none" }}>
+              <FieldCanvas data={o.wf} n={128} map={divMap} lo={-w} hi={w} label="Wavefront error map" smooth />
+            </div>
+            <ColorScale map={divMap} lo={`−${w.toFixed(1)}λ`} hi={`+${w.toFixed(1)}λ`} />
+          </div>
+          <div className={styles.pane}>
+            <div className={styles.paneHead}>
+              <span className={styles.paneTitle}><span className={styles.step}>b</span>PSF |𝓕{"{P}"}|²</span>
+              <span className={styles.paneMeta}>{o.psf.displayFieldArcmin.toFixed(0)}′ field</span>
+            </div>
+            <div className={styles.canvasFrame}>
+              <FieldCanvas data={o.psf.display} n={o.psf.displayN} map={viridis} lo={-3} hi={0} transform={logT} label="Point spread function, log scale" />
+            </div>
+            <ColorScale map={viridis} lo="10⁻³" hi="1" />
+          </div>
+          <div className={styles.pane}>
+            <div className={styles.paneHead}>
+              <span className={styles.paneTitle}><span className={styles.step}>c</span>Retinal image</span>
+              <span className={styles.paneMeta}>{(N_IMG * ARCMIN_PER_PX / 60).toFixed(1)}° field</span>
+            </div>
+            <div className={styles.canvasFrame}>
+              <FieldCanvas data={o.retina} n={N_IMG} map={gray} label="Letter chart as seen by this eye" smooth />
+            </div>
+            <div className={styles.paneFoot}>
+              <span className={styles.badge}>
+                <span className={styles.badgeDot} style={o.psf.mode === "geometric" ? { background: "var(--red)" } : undefined} />
+                {o.psf.mode === "wave" ? "Fourier (wave) optics" : "Ray optics (blur ≫ diffraction)"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function snellenLimit(blurArcmin: number) {
+  // A letter stays legible while the blur disc is below roughly its stroke width × 2.
+  const rows = [20, 25, 30, 40, 50, 70, 100, 200];
+  for (const r of rows) if (blurArcmin <= (5 * r) / 20 * 0.55 + 0.6) return `20/${r}`;
+  return "worse than 20/200";
+}
+
+/** Figure: Wiener pre-distortion (Step 2). */
+export function PredistortFigure({ eye }: { eye: Eye }) {
+  const o = useOptics(eye);
+  const [k, setK] = useState(-3);
+  const dk = useDeferredValue(k);
+  const pre = useMemo(() => predistort(o.img, N_IMG, o.psf.kernel, o.psf.K, 10 ** dk), [o, dk]);
+  const sOrig = sharpness(o.img, N_IMG);
+  const pct = (s: number) => `${((100 * s) / sOrig).toFixed(0)}%`;
+  return (
+    <div>
+      <div className={styles.toolbar}>
+        <div style={{ width: 260 }}>
+          <Slider label="Wiener regulariser log₁₀ k" value={k} min={-4} max={-0.5} step={0.25} onChange={setK} signed={false} />
+        </div>
+        <div className={styles.spacer} />
+        <span className={styles.badge}>
+          Eye: S {eye.S.toFixed(2)} / C {eye.C.toFixed(2)} × {eye.axis}°, pupil {eye.pupil} mm (set in Fig. 2)
+        </span>
+      </div>
+      <div className={styles.triptych}>
+        <div className={styles.pane}>
+          <div className={styles.paneHead}>
+            <span className={styles.paneTitle}><span className={styles.step}>a</span>Normal screen, seen by the eye</span>
+          </div>
+          <div className={styles.canvasFrame}><FieldCanvas data={o.retina} n={N_IMG} map={gray} label="Blurred chart" smooth /></div>
+          <div className={styles.paneFoot}>Edge energy {pct(sharpness(o.retina, N_IMG))} of original</div>
+        </div>
+        <div className={styles.pane}>
+          <div className={styles.paneHead}>
+            <span className={styles.paneTitle}><span className={styles.step}>b</span>Pre-distorted screen</span>
+          </div>
+          <div className={styles.canvasFrame}><FieldCanvas data={pre.display} n={N_IMG} map={gray} label="Pre-distorted chart" smooth /></div>
+          <div className={styles.paneFoot}>What the display shows, clipped to [0, 1]</div>
+        </div>
+        <div className={styles.pane}>
+          <div className={styles.paneHead}>
+            <span className={styles.paneTitle}><span className={styles.step}>c</span>Pre-distorted, seen by the eye</span>
+          </div>
+          <div className={styles.canvasFrame}><FieldCanvas data={pre.perceived} n={N_IMG} map={gray} label="Pre-distorted chart as perceived" smooth /></div>
+          <div className={styles.paneFoot}>Edge energy {pct(sharpness(pre.perceived, N_IMG))} of original</div>
+        </div>
+      </div>
+    </div>
+  );
+}

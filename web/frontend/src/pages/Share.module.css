@@ -1,0 +1,14 @@
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.confidence {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.cardLink {
+  text-decoration: none;
+}

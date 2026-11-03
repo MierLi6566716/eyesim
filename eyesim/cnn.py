@@ -1,38 +1,17 @@
 """
-PupilNet: lightweight CNN for refractive error estimation.
+PupilNet: the small network that reads an eye photo and outputs the prescription.
 
-Predicts the Thibos power vector (M, J0, J45) from a 2-channel eccentric
-photorefraction image (horizontal + vertical source). Power-vector outputs
-avoid the axis-wrapping discontinuity of (S, C, axis) and integrate directly
-with the closed-loop optimizer in optimize.py.
-
-Architecture
-------------
-Four depthwise-separable conv blocks halve the spatial resolution at each
-stage. Global average pooling + two FC layers produce the three output values.
-
-Total parameters: ~450 k — fits in 1.8 MB fp32, 0.45 MB INT8.
-The block design is INT8-quantizable (no operation that breaks PTQ):
-  - No sigmoid/tanh in the backbone (only ReLU)
-  - No layer norm (only batch norm, which folds into conv at export)
-  - Linear output head (no activation on regression targets)
-
-Production notes
-----------------
-Deployment on edge hardware (Jetson Orin Nano, RPi CM4 with Hailo-8):
-  torch.export → ONNX → TensorRT/HAILOrt INT8 quantization.
-  Expected latency: 0.5–2 ms per frame at INT8 on NPU.
-
-  Before deployment, calibrate the output scale by comparing CNN predictions
-  against a reference autorefractor on 50+ eyes. A linear correction
-  (a*M_pred + b) per component reduces systematic bias from the sim-to-real gap.
+Input: the two LED frames (64 x 64 each) plus the rig numbers the photo can't
+show (distance, LED offset, pupil size, lens opening). Output: M, J0, J45 in
+dioptres. A stem conv, four depthwise-separable conv blocks that each halve the
+image, average pooling, then two dense layers. About 150k parameters, small
+enough to run on a Pi.
 """
 
 from __future__ import annotations
 import numpy as np
 import torch
 import torch.nn as nn
-from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +32,21 @@ class _DepthwiseBlock(nn.Module):
         return self.act(self.bn(self.pw(self.dw(x))))
 
 
+def normalize_frames(x: torch.Tensor) -> torch.Tensor:
+    """
+    Remove exposure from a batch of frames (B, C, H, W) in [0, 1].
+
+    Both LED channels of a sample are divided by one shared scale (their joint
+    98th percentile), so the brightness RATIO between the two LEDs, which
+    carries the astigmatism, is kept. The scale has a floor so that a frame
+    with no reflex (the instrument's dark zone) is not blown up into noise.
+    """
+    flat = x.flatten(1)
+    k = max(1, int(0.02 * flat.shape[1]))
+    scale = flat.topk(k, dim=1).values[:, -1].clamp_min(0.08)
+    return (x / scale[:, None, None, None]).clamp(0.0, 2.0)
+
+
 class PupilNet(nn.Module):
     """
     Predict (M, J0, J45) in dioptres from a 2-channel photorefraction image.
@@ -63,10 +57,18 @@ class PupilNet(nn.Module):
     To convert back to clinical notation:
         from eyesim.optimize import power_vector_to_prescription
         S, C, axis = power_vector_to_prescription(M, J0, J45)
+
+    aux_dim > 0 adds the rig numbers as a second input (see
+    eyesim.photorefraction.aux_vector). The photo alone can't tell a strong
+    prescription far away from a weak one up close, so the network needs them.
+    input_norm applies ``normalize_frames`` inside the model.
     """
 
-    def __init__(self, image_size: int = 64, in_channels: int = 2):
+    def __init__(self, image_size: int = 64, in_channels: int = 2,
+                 aux_dim: int = 0, input_norm: bool = False):
         super().__init__()
+        self.aux_dim = aux_dim
+        self.input_norm = input_norm
         # Stem: standard conv to avoid depthwise on 2-ch input
         self.stem = nn.Sequential(
             nn.Conv2d(in_channels, 32, 3, stride=2, padding=1, bias=False),
@@ -84,82 +86,26 @@ class PupilNet(nn.Module):
         # Regression head
         self.head = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(256, 128),
+            nn.Linear(256 + (32 if aux_dim else 0), 128),
             nn.ReLU(inplace=True),
             nn.Dropout(0.2),
             nn.Linear(128, 3),
         )
+        if aux_dim:
+            self.aux_net = nn.Sequential(nn.Linear(aux_dim, 32), nn.ReLU(inplace=True))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, aux: torch.Tensor | None = None) -> torch.Tensor:
+        if self.input_norm:
+            x = normalize_frames(x)
         x = self.stem(x)
         x = self.blocks(x)
-        x = self.pool(x)
+        x = self.pool(x).flatten(1)
+        if self.aux_dim:
+            if aux is None:
+                raise ValueError("this PupilNet was built with aux_dim > 0 and needs the geometry input")
+            x = torch.cat([x, self.aux_net(aux)], dim=1)
         return self.head(x)
 
 
 def count_parameters(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-# ---------------------------------------------------------------------------
-# Dataset
-# ---------------------------------------------------------------------------
-
-class PrescriptionDataset(torch.utils.data.Dataset):
-    """
-    Loads a .npz dataset generated by scripts/generate_dataset.py.
-
-    .npz must contain:
-        images : float32  (N, H, W, 2)  — 2-channel photorefraction images
-        labels : float32  (N, 3)        — [M, J0, J45] in dioptres
-
-    Returns (image_tensor, label_tensor) with image shape (2, H, W).
-    """
-
-    def __init__(self, npz_path: str | Path, augment: bool = False):
-        data = np.load(npz_path)
-        self.images = data["images"].astype(np.float32)   # (N, H, W, 2)
-        self.labels = data["labels"].astype(np.float32)   # (N, 3)
-        self.augment = augment
-
-    def __len__(self) -> int:
-        return len(self.labels)
-
-    def __getitem__(self, idx: int):
-        img = self.images[idx]                    # (H, W, 2)
-        lbl = self.labels[idx]                    # (3,)
-
-        if self.augment:
-            # Mild intensity jitter — simulates exposure variation
-            img = img * np.random.uniform(0.9, 1.1)
-            # Additive noise — simulates sensor read noise
-            img = img + np.random.normal(0, 0.01, img.shape).astype(np.float32)
-            img = np.clip(img, 0.0, 1.0)
-
-        # HWC → CHW for PyTorch
-        img_t = torch.from_numpy(img.transpose(2, 0, 1))
-        lbl_t = torch.from_numpy(lbl)
-        return img_t, lbl_t
-
-
-# ---------------------------------------------------------------------------
-# Losses and metrics
-# ---------------------------------------------------------------------------
-
-def power_vector_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    """
-    MSE in power-vector space, equal weight on M, J0, J45.
-    This is a proxy for clinical accuracy (see power_vector_distance below).
-    """
-    return nn.functional.mse_loss(pred, target)
-
-
-def power_vector_mae(pred: torch.Tensor, target: torch.Tensor) -> dict[str, float]:
-    """Return per-component and combined MAE in dioptres."""
-    diff = (pred - target).abs()
-    return {
-        "M_mae":   diff[:, 0].mean().item(),
-        "J0_mae":  diff[:, 1].mean().item(),
-        "J45_mae": diff[:, 2].mean().item(),
-        "total_mae": diff.mean().item(),
-    }

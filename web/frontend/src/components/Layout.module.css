@@ -1,0 +1,13 @@
+.shell { min-height: 100vh; display: flex; flex-direction: column; }
+.main { flex: 1; width: 100%; }
+.footer {
+  font-family: var(--sans);
+  font-size: 13.5px;
+  color: var(--ink-3);
+  max-width: var(--wide-w);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+}
+.footer p { margin: 0 0 4px; max-width: var(--text-w); }
+@media (max-width: 640px) { .footer { padding: 0 16px 32px; } }

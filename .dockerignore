@@ -1,0 +1,13 @@
+data/
+Miniconda3*.sh
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.DS_Store
+web/frontend/node_modules/
+web/frontend/dist/
+web/backend/_local_storage/
+web/backend/*.db
+web/backend/.env

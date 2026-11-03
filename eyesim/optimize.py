@@ -1,21 +1,15 @@
 """
-Closed-loop optimizer.
-
-Simulates the core control loop of the self-refracting corrector: given a
-test image displayed through an eye with an unknown prescription, find the
-tunable-lens correction that maximises image sharpness.
-
-Three functions:
-1. Sharpness metrI ic: This is what we are trying to maximize. 
-2. Optimizer: We need this to be gradient-free for hardware aplications. 
-3. Search space: We optimize over (M, J0, J45), Cartesian. 
+Finds the lens setting that makes the view sharpest, without knowing the
+prescription: try a correction, measure how sharp the image looks, adjust,
+repeat. It searches over (M, J0, J45) with Nelder-Mead, which needs no
+gradients, so it would work the same on real hardware.
 """
 
 from __future__ import annotations
 import numpy as np
 from scipy.optimize import minimize
 from scipy.ndimage import laplace
-from .optics import prescription_to_power_vector, psf_from_prescription, blur_image
+from .optics import prescription_to_power_vector, min_psf_crop, psf_from_prescription, blur_image
 
 
 def sharpness(image: np.ndarray) -> float:
@@ -43,11 +37,13 @@ def run_closed_loop(
     test_image: np.ndarray,
     pupil_radius_mm: float = 2.0,
     wavelength_nm: float = 550.0,
-    grid: int = 128,
-    psf_crop: int = 32,
+    grid: int | None = None,
+    psf_crop: int | None = None,
     x0: tuple[float, float, float] = (0.0, 0.0, 0.0),
     max_iter: int = 400,
     tol: float = 1e-4,
+    coarse_scan: bool = True,
+    simplex_size: float = 0.5,
 ) -> dict:
     """
     Simulate the closed-loop correction for one eye prescription.
@@ -55,7 +51,9 @@ def run_closed_loop(
     Runs a gradient-free Nelder-Mead search over tunable-lens correction
     (M_c, J0_c, J45_c) to maximise the sharpness of: blur(test_image,  PSF(eye_prescription + correction))
 
-    Returns: 
+    grid/psf_crop of None pick a PSF size big enough for the eye's power.
+
+    Returns:
     dict with keys:
         S_correction, C_correction, axis_correction
             Optimal correction in clinical form.
@@ -71,26 +69,33 @@ def run_closed_loop(
             List of (M_c, J0_c, J45_c, sharpness) for every evaluation.
     """
     M_eye, J0_eye, J45_eye = prescription_to_power_vector(true_S, true_C, true_axis)
+
+    if psf_crop is None:
+        worst = max(abs(true_S), abs(true_S + true_C))
+        psf_crop = min_psf_crop(worst + 0.5, pupil_radius_mm)
+    if grid is None:
+        grid = max(2 * psf_crop, 256)
+
     history: list[tuple] = []
+    def _psf(S, C, ax):
+        return psf_from_prescription(
+            S, C, ax, pupil_radius_mm=pupil_radius_mm, wavelength_nm=wavelength_nm,
+            grid=grid, psf_crop=psf_crop,
+        )
+
     def objective(params):
         M_c, J0_c, J45_c = params
         S_res, C_res, ax_res = power_vector_to_prescription(
             M_eye + M_c, J0_eye + J0_c, J45_eye + J45_c
         )
-        psf = psf_from_prescription(
-            S_res, C_res, ax_res,
-            pupil_radius_mm=pupil_radius_mm,
-            wavelength_nm=wavelength_nm,
-            grid=grid,
-            psf_crop=psf_crop,
-        )
+        psf = _psf(S_res, C_res, ax_res)
         s = sharpness(blur_image(test_image, psf))
         history.append((float(M_c), float(J0_c), float(J45_c), s))
         return -s  # minimise negative sharpness
-    
+
     # Baseline: sharpness with zero correction applied
     S0, C0, ax0 = power_vector_to_prescription(M_eye, J0_eye, J45_eye)
-    psf0 = psf_from_prescription(S0, C0, ax0, pupil_radius_mm=pupil_radius_mm, wavelength_nm=wavelength_nm, grid=grid, psf_crop=psf_crop)
+    psf0 = _psf(S0, C0, ax0)
     sharp_uncorr = sharpness(blur_image(test_image, psf0))
     J00, J450 = float(x0[1]), float(x0[2])
 
@@ -99,29 +104,30 @@ def run_closed_loop(
     # correction, then rises sharply near the true prescription. Scanning M
     # alone (no astigmatism) avoids the spurious local maxima that arise when
     # directional PSFs interact with non-isotropic images.
+    # When a good initial guess exists (e.g. a CNN photorefraction estimate),
+    # pass coarse_scan=False to start Nelder-Mead directly from x0.
     best_M = float(x0[0])
-    best_s_scan = -np.inf
-    for M_scan in np.arange(-5.0, 5.5, 0.5):
-        S_s, C_s, ax_s = power_vector_to_prescription(
-            M_eye + M_scan, J0_eye + J00, J45_eye + J450
-        )
-        psf_s = psf_from_prescription(S_s, C_s, ax_s,
-                                      pupil_radius_mm=pupil_radius_mm,
-                                      wavelength_nm=wavelength_nm,
-                                      grid=grid, psf_crop=psf_crop)
-        s_scan = sharpness(blur_image(test_image, psf_s))
-        history.append((float(M_scan), J00, J450, s_scan))
-        if s_scan > best_s_scan:
-            best_s_scan = s_scan
-            best_M = float(M_scan)
+    if coarse_scan:
+        best_s_scan = -np.inf
+        for M_scan in np.arange(-5.0, 5.5, 0.5):
+            S_s, C_s, ax_s = power_vector_to_prescription(
+                M_eye + M_scan, J0_eye + J00, J45_eye + J450
+            )
+            psf_s = _psf(S_s, C_s, ax_s)
+            s_scan = sharpness(blur_image(test_image, psf_s))
+            history.append((float(M_scan), J00, J450, s_scan))
+            if s_scan > best_s_scan:
+                best_s_scan = s_scan
+                best_M = float(M_scan)
 
-    # Stage 2: Nelder-Mead from the best M, ±0.5 D simplex in all three axes.
+    # Stage 2: Nelder-Mead from the best M, ±simplex_size D simplex in all three axes.
+    d = simplex_size
     x_start = [best_M, J00, J450]
     init_simplex = np.array([
-        [x_start[0],       x_start[1],       x_start[2]      ],
-        [x_start[0] + 0.5, x_start[1],       x_start[2]      ],
-        [x_start[0],       x_start[1] + 0.5, x_start[2]      ],
-        [x_start[0],       x_start[1],       x_start[2] + 0.5],
+        [x_start[0],     x_start[1],     x_start[2]    ],
+        [x_start[0] + d, x_start[1],     x_start[2]    ],
+        [x_start[0],     x_start[1] + d, x_start[2]    ],
+        [x_start[0],     x_start[1],     x_start[2] + d],
     ])
     result = minimize(
         objective,

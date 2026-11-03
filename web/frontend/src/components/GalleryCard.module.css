@@ -1,0 +1,35 @@
+.card {
+  display: block;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.card:hover .meta { text-decoration: underline; }
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.badge {
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.sim {
+  color: var(--blue);
+}
+
+.diag {
+  color: var(--red);
+}

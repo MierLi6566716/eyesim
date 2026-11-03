@@ -1,0 +1,65 @@
+.videoWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: #000;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+/* The captured still is drawn already-mirrored onto the canvas (see
+   capture()'s ctx.scale(-1, 1)) so it matches what the live .video preview
+   showed; this must NOT get a second CSS mirror on top of that. */
+.capturedImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.guide {
+  position: absolute;
+  inset: 12%;
+  border: 2px dashed var(--accent-2);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.starting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--fg-dim);
+  
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.captured {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 3px 8px;
+  border-radius: 2px;
+}
+
+.error {
+  color: var(--fg-dim);
+  font-size: 11px;
+  margin-top: 6px;
+}

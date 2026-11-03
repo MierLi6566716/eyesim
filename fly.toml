@@ -1,0 +1,20 @@
+# Run from the REPO ROOT: `fly launch` (first time) / `fly deploy`.
+# Build context is the repo root so the image can install the eyesim
+# package directly — see web/backend/Dockerfile.
+
+app = "eyesim-lab-api"  # must be globally unique on Fly — change if taken
+primary_region = "iad"
+
+[build]
+  dockerfile = "web/backend/Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"  # torch + numpy/scipy import overhead; 512mb risks OOM

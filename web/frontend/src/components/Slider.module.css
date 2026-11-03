@@ -1,0 +1,65 @@
+.row {
+  margin-bottom: 16px;
+  font-family: var(--sans);
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.value.amber {
+  color: var(--red);
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  outline: none;
+  --fill: var(--ink);
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--ink-3);
+}
+.slider::-moz-range-track {
+  height: 2px;
+  background: var(--ink-3);
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  background: var(--fill);
+  border: none;
+  border-radius: 50%;
+  cursor: grab;
+  transition: transform 100ms ease;
+}
+.slider:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
+
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--fill);
+  border: none;
+  border-radius: 50%;
+  cursor: grab;
+}
+
+.amberSlider { --fill: var(--red); }

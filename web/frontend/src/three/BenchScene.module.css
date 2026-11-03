@@ -1,0 +1,11 @@
+.label {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--surface);
+  padding: 2px 7px;
+  pointer-events: none;
+  user-select: none;
+}

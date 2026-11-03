@@ -77,9 +77,9 @@ def test_sharpness_orders_blur(img_iso):
     Comparing raw image vs blurred is not valid because the defocus PSF's
     ring structure can create new edges, raising the Laplacian spuriously.
     """
-    psf_none  = psf_from_prescription(0.0,  0.0, 0.0, grid=64, psf_crop=32)
-    psf_mild  = psf_from_prescription(-0.5, 0.0, 0.0, grid=64, psf_crop=32)
-    psf_heavy = psf_from_prescription(-2.0, 0.0, 0.0, grid=64, psf_crop=32)
+    psf_none  = psf_from_prescription(0.0,  0.0, 0.0)
+    psf_mild  = psf_from_prescription(-0.5, 0.0, 0.0)
+    psf_heavy = psf_from_prescription(-2.0, 0.0, 0.0)
     s_sharp = sharpness(blur_image(img_iso, psf_none))
     s_mild  = sharpness(blur_image(img_iso, psf_mild))
     s_heavy = sharpness(blur_image(img_iso, psf_heavy))
@@ -94,7 +94,7 @@ def test_sharpness_orders_blur(img_iso):
 
 def test_optimizer_sphere_improves_sharpness(img_iso):
     """Correction should raise sharpness by at least 10 dB."""
-    res = run_closed_loop(-1.5, 0.0, 0.0, img_iso, grid=64, psf_crop=32, max_iter=400)
+    res = run_closed_loop(-1.5, 0.0, 0.0, img_iso, max_iter=400)
     assert res["sharpness_improvement_dB"] > 10.0, (
         f"Insufficient improvement: {res['sharpness_improvement_dB']:.1f} dB"
     )
@@ -105,7 +105,7 @@ def test_optimizer_sphere_converges(img_iso):
     For a -1.5 D sphere, M_correction should converge to +1.5 D within 0.25 D.
     J0 and J45 corrections should be near zero.
     """
-    res = run_closed_loop(-1.5, 0.0, 0.0, img_iso, grid=64, psf_crop=32, max_iter=400)
+    res = run_closed_loop(-1.5, 0.0, 0.0, img_iso, max_iter=400)
     assert abs(res["M_correction"] - 1.5) < 0.25, (
         f"M_correction {res['M_correction']:.3f} too far from 1.5"
     )
@@ -119,7 +119,7 @@ def test_optimizer_astigmat_converges(img_iso):
     converge within 0.25 D of the true correction.
     True correction: M=+1.75, J0=-0.125, J45=-0.2165.
     """
-    res = run_closed_loop(-1.5, -0.5, 30.0, img_iso, grid=64, psf_crop=32, max_iter=400)
+    res = run_closed_loop(-1.5, -0.5, 30.0, img_iso, max_iter=400)
     assert abs(res["M_correction"]   - 1.75)   < 0.25, (
         f"M_correction {res['M_correction']:.3f} not within 0.25 of 1.75"
     )
@@ -129,7 +129,7 @@ def test_optimizer_astigmat_converges(img_iso):
 
 def test_optimizer_history_populated(img_iso):
     """history should contain at least one entry per iteration, all valid."""
-    res = run_closed_loop(-1.5, 0.0, 0.0, img_iso, grid=64, psf_crop=32, max_iter=400)
+    res = run_closed_loop(-1.5, 0.0, 0.0, img_iso, max_iter=400)
     assert len(res["history"]) > 0
     for entry in res["history"]:
         M_c, J0_c, J45_c, s = entry

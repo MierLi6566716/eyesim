@@ -1,0 +1,154 @@
+/* ---------- page header ---------- */
+.pageHeader {
+  max-width: var(--wide-w);
+  margin: 0 auto;
+  padding: 56px 24px 8px;
+}
+.kicker {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+}
+.title {
+  font-size: clamp(30px, 4.2vw, 42px);
+  line-height: 1.15;
+  margin: 0 0 18px;
+  max-width: 20em;
+}
+.lede {
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: var(--text-w);
+  margin: 0;
+}
+
+/* ---------- article grid ---------- */
+.articleGrid {
+  max-width: var(--wide-w);
+  margin: 0 auto;
+  padding: 0 24px 96px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 64px;
+}
+.toc {
+  order: 2;
+  position: sticky;
+  top: 72px;
+  align-self: start;
+  padding-top: 44px;
+  font-family: var(--sans);
+  font-size: 13.5px;
+}
+.tocLabel { font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc a {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  color: var(--ink-3);
+  text-decoration: none;
+  line-height: 1.35;
+}
+.toc a:hover { color: var(--ink); text-decoration: underline; }
+.toc a.tocActive { color: var(--ink); font-weight: 700; }
+.tocNum { font-variant-numeric: tabular-nums; min-width: 22px; }
+
+.body { min-width: 0; padding-top: 8px; }
+.body > * { max-width: var(--text-w); }
+
+@media (max-width: 980px) {
+  .articleGrid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .toc { display: none; }
+}
+@media (max-width: 640px) {
+  .pageHeader { padding: 36px 16px 4px; }
+  .articleGrid { padding: 0 16px 64px; }
+  .lede { font-size: 18px; }
+}
+
+/* ---------- sections ---------- */
+.section { max-width: none !important; padding-top: 36px; scroll-margin-top: 56px; }
+.section > * { max-width: var(--text-w); }
+.h2 { font-size: 24px; margin: 0 0 12px; display: flex; gap: 12px; align-items: baseline; }
+.secNum { font-variant-numeric: tabular-nums; }
+.section h3 { font-size: 19px; margin: 1.6em 0 0.5em; }
+.section ul, .section ol { padding-left: 1.4em; }
+.section li { margin-bottom: 0.35em; }
+
+.eq { color: var(--ink); }
+
+/* Run-in headed paragraphs, used where a list of options needs a sentence or two each. */
+.runin { margin: 0 0 0.9em; }
+.runin > strong:first-child { margin-right: 0.35em; }
+
+/* ---------- figures ---------- */
+.figure { margin: 32px 0 36px; }
+.section > .figure.wide, .body > .figure.wide { max-width: none; }
+.figBody { padding: 0; }
+.caption {
+  font-size: 15.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  margin-top: 14px;
+  max-width: var(--text-w);
+}
+.figNum { font-weight: 700; }
+
+/* ---------- remarks ---------- */
+.note { margin: 22px 0 22px 1.6em; font-size: 16.5px; }
+.note p:last-child { margin-bottom: 0; }
+.noteLabel { font-style: italic; font-weight: 600; }
+
+/* ---------- headline numbers: a ruled two-column list ---------- */
+.statRow {
+  margin: 26px 0;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  padding: 6px 0;
+}
+.stat { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 5px 0; }
+.statValue { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.statUnit { font-weight: 400; margin-left: 4px; }
+.statLabel { font-size: 16.5px; line-height: 1.4; }
+@media (max-width: 480px) {
+  .stat { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
+/* ---------- read-outs beside figures ---------- */
+.readout {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-family: var(--sans);
+  font-size: 14px;
+  padding: 3px 0;
+}
+.readoutLabel { color: var(--ink-2); }
+.readoutValue { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.readoutUnit { font-weight: 400; color: var(--ink-2); }
+.blue { color: var(--blue); }
+.red { color: var(--red); }
+.green { color: var(--green); }
+
+.panel { font-family: var(--sans); }
+.panelTitle { font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+
+/* ---------- segmented control ---------- */
+.segWrap { display: flex; flex-direction: column; gap: 6px; font-family: var(--sans); }
+.segLabel { font-size: 13px; color: var(--ink-2); }
+.segmented { display: inline-flex; border: 1px solid var(--ink); width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.segmented button { border: none; border-radius: 0; padding: 5px 11px; font-size: 13px; background: transparent; color: var(--ink); }
+.segmented button + button { border-left: 1px solid var(--ink); }
+.segmented button.segOn { background: var(--ink); color: var(--page); }
+
+/* ---------- tables (three rules, no row lines) ---------- */
+.tableWrap { overflow-x: auto; margin: 22px 0 28px; }
+.table { width: 100%; border-collapse: collapse; font-size: 16.5px; line-height: 1.4; border-top: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); }
+.table th { text-align: left; font-weight: 700; padding: 7px 16px 7px 0; border-bottom: 1px solid var(--ink); }
+.table td { padding: 6px 16px 6px 0; vertical-align: top; }
+.table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 0; }
+.table tfoot td { font-weight: 700; border-top: 1px solid var(--ink); }

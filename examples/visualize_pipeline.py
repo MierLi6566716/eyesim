@@ -1,7 +1,5 @@
 """
-Visualize the full eyesim pipeline: Steps 1–3 + Step 4 preview.
-
-Saves four PNG files to examples/output/:
+Makes the four overview pictures of the project, saved in examples/output/:
 
   step1_eye_blur.png        — grid of what different prescriptions look like
   step2_predistort.png      — pre-distortion display chain
@@ -22,10 +20,11 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from eyesim.optics import psf_from_prescription, blur_image, simulate_vision
-from eyesim.predistort import predistort, simulate_display_chain
+from eyesim.optics import blur_image, calibrated_psf_for_image
+from eyesim.predistort import wiener_deconvolve, _fft_blur
 from eyesim.optimize import run_closed_loop
-from eyesim.photorefraction import render_single
+from eyesim.photorefraction import Eye, Scene, render_pair
+from eyesim.pipeline import RIG
 
 OUT = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUT, exist_ok=True)
@@ -74,8 +73,12 @@ def plot_step1():
                  fontsize=13, fontweight="bold")
 
     for ax, (S, C, axis, label) in zip(axes.flat, cases):
-        seen, _ = simulate_vision(CHART, S, C, axis, pupil_radius_mm=2.0,
-                                  grid=128, psf_crop=48)
+        # calibrated_psf_for_image sizes the kernel against CHART's actual
+        # pixel dimensions (assumed field of view), not a fixed pixel count
+        # — the fixed psf_crop=48 this replaced made -5 D span ~19% of a
+        # 256px chart regardless of how that compares to -1.5 D's kernel.
+        psf = calibrated_psf_for_image(S, C, axis, CHART.shape, pupil_radius_mm=2.0)
+        seen = blur_image(CHART, psf)
         ax.imshow(seen, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
         ax.set_title(label, fontsize=8.5)
         ax.axis("off")
@@ -93,8 +96,19 @@ def plot_step1():
 
 def plot_step2():
     S, C, axis = -1.5, -0.5, 30.0
-    chain = simulate_display_chain(CHART, S=S, C=C, theta_deg=axis,
-                                   grid=128, psf_crop=48, noise_power=1e-3)
+    # calibrated_psf_for_image sizes the kernel against CHART's actual pixel
+    # dimensions instead of a fixed psf_crop=48 (see plot_step1's comment).
+    # wiener_deconvolve/_fft_blur are the same low-level circular-convolution
+    # pair eyesim.predistort.simulate_display_chain uses internally, called
+    # directly here so both use this one calibrated psf.
+    psf = calibrated_psf_for_image(S, C, axis, CHART.shape, pupil_radius_mm=2.0)
+    predistorted = wiener_deconvolve(CHART, psf, noise_power=1e-3)
+    chain = {
+        "original": CHART,
+        "predistorted": predistorted,
+        "seen_corrected": _fft_blur(predistorted, psf),
+        "seen_raw": _fft_blur(CHART, psf),
+    }
 
     panels = [
         (chain["original"],       "Original\n(what was intended)"),
@@ -147,7 +161,7 @@ def plot_step3():
     colors_nm   = "darkorange"
 
     for ax, (S, C, axis, label) in zip(axes, cases):
-        res = run_closed_loop(S, C, axis, img_iso, grid=64, psf_crop=32, max_iter=400)
+        res = run_closed_loop(S, C, axis, img_iso, max_iter=400)
         history = res["history"]
 
         # Stage 1: coarse scan (first 21 evaluations)
@@ -195,7 +209,7 @@ def plot_step4():
 
     fig, axes = plt.subplots(n_rows, n_cols * 2, figsize=(14, 8))
     fig.suptitle(
-        "Step 4 — Synthetic eccentric photorefraction pupil images\n"
+        "Step 4 — Simulated infrared pupil photos, camera at 1 m\n"
         "Left column per pair: horizontal source  |  Right: vertical source",
         fontsize=11, fontweight="bold"
     )
@@ -203,12 +217,9 @@ def plot_step4():
     rng = np.random.default_rng(0)
     for r, M in enumerate(Ms):
         for c, (J0, J45) in enumerate(zip(J0s, J45s)):
-            # Convert power vector to prescription
-            from eyesim.optimize import power_vector_to_prescription
-            S, C, axis = power_vector_to_prescription(M, J0, J45)
-
-            ch0 = render_single(S, C, axis, ex=10.0, ey=0.0,   noise_std=0.02, rng=rng)
-            ch1 = render_single(S, C, axis, ex=0.0,  ey=10.0,  noise_std=0.02, rng=rng)
+            img = render_pair(Eye(M=M, J0=J0, J45=J45, pupil_r_mm=3.0, scatter_mrad=2.0), RIG,
+                              Scene(glint_amp=1.0, red_reflex=0.03), rng)
+            ch0, ch1 = img[..., 0], img[..., 1]
 
             ax_h = axes[r, c * 2]
             ax_v = axes[r, c * 2 + 1]

@@ -1,0 +1,28 @@
+.stage { position: relative; height: 470px; overflow: hidden; background: var(--surface-2); }
+.loading { display: grid; place-items: center; height: 100%; font-family: var(--sans); color: var(--ink-3); font-size: 14px; }
+.hint { position: absolute; left: 12px; bottom: 10px; font-family: var(--sans); font-size: 12px; color: var(--ink-3); pointer-events: none; }
+.frames { position: absolute; right: 12px; top: 12px; display: flex; gap: 8px; }
+.frame { width: 84px; font-family: var(--sans); font-size: 11.5px; color: var(--ink-2); text-align: center; background: var(--surface); padding: 6px; }
+.frame span { display: block; margin-top: 4px; }
+
+.pipeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.stepCard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  padding: 10px 10px 12px 0; border: none; border-top: 3px solid var(--rule); border-radius: 0; background: transparent;
+  min-height: 112px;
+}
+.stepCard:hover:not(:disabled) { background: transparent; border-top-color: var(--ink-3); }
+.stepOn, .stepOn:hover:not(:disabled) { border-top-color: var(--ink); }
+.stepNum { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+.stepOn .stepNum { color: var(--ink); }
+.stepTitle { font-weight: 700; font-size: 14px; color: var(--ink); }
+.stepDesc { font-size: 13px; color: var(--ink-2); line-height: 1.4; font-weight: 400; }
+@media (max-width: 860px) {
+  .pipeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stage { height: 380px; }
+}
+@media (max-width: 480px) {
+  .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .frames { top: auto; bottom: 34px; }
+  .frame { width: 70px; }
+}

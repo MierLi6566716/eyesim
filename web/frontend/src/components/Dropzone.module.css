@@ -1,0 +1,21 @@
+.zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  padding: 8px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.zone:hover {
+  border-color: var(--ink);
+}
+
+.over {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}

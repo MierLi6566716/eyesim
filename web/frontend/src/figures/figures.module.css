@@ -1,0 +1,55 @@
+/* Shared layout for interactive figures. */
+.split {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 36px;
+  align-items: start;
+}
+.controls { font-family: var(--sans); }
+.controls > * + * { margin-top: 2px; }
+.controlsGroup + .controlsGroup { margin-top: 22px; }
+.groupTitle { font-family: var(--sans); font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+
+.triptych { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.quad { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+
+.pane { font-family: var(--sans); min-width: 0; }
+.paneHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.paneTitle { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.paneTitle .step { font-weight: 400; color: var(--ink-3); margin-right: 6px; }
+.paneMeta { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap; }
+.paneFoot { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+.canvasFrame { overflow: hidden; background: var(--surface-2); }
+.canvasDark { background: #0c0d10; }
+
+.scale { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+.scaleBar { flex: 1; height: 6px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--sans); font-size: 13px; color: var(--ink-2);
+}
+.badgeDot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; font-family: var(--sans); }
+.toolbar .spacer { flex: 1; }
+
+.check { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 14px; color: var(--ink); cursor: pointer; }
+.check input { accent-color: var(--ink); width: 15px; height: 15px; }
+
+.readouts { margin-top: 14px; max-width: 300px; }
+
+.arrow { color: var(--ink-3); font-family: var(--sans); }
+
+.svgFig { width: 100%; height: auto; display: block; font-family: var(--sans); }
+.svgFig text { fill: var(--ink-2); font-size: 12px; }
+
+@media (max-width: 860px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .quad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .triptych { grid-template-columns: minmax(0, 1fr); }
+  .duo { grid-template-columns: minmax(0, 1fr); }
+}

@@ -1,9 +1,17 @@
 # eyesim
 
-In this project, we want to simulate how a human eye, given a refractive prescription **(Sphere, Cylinder, Axis)** sees the world, and build toward a **closed-loop self-refracting corrector**: ultimately, if possible, a wearable device that measures your refraction, drives a tunable lens to correct it, then re measures and converges, without needing any optometrist and no manul 1 or 2 selections.
+Measuring a glasses prescription from infrared photos of the eye, and
+simulating what that prescription does to vision.
 
-**Not a medical device. Not for clinical use.** Research / engineering prototype only.
+The idea: put an 850 nm LED right next to a camera lens and take a photo of
+someone's eye. Light goes into the eye, bounces off the retina and comes back
+out through the pupil. If the eye isn't focused on the camera, part of the
+pupil lights up as a bright **crescent**. Its side and size give the
+prescription. A small network (PupilNet), trained on simulated photos, reads
+the crescent. A second method needs no network: you swap trial lenses and
+watch the crescent flip sides.
 
+**Not a medical device.** Research prototype only.
 
 ## Demo
 Access this website: https://frontend-dun-ten-37.vercel.app 
@@ -32,105 +40,309 @@ This is a visualization of the physics and math behind the eysim project:
 
 **/Gallery/Stats**: Live M-Distribution histogram, model filtering, pagination, all real SQL aggregates.
 
-## Why this exists
+## What's in here
 
-The three pieces of "glasses that measure and fix your prescription" each already exist in isolation:
+| Folder | What it is |
+|---|---|
+| `eyesim/` | The Python package. `photorefraction.py` makes the fake eye photos, `cnn.py` is the network, `optics.py` / `predistort.py` / `optimize.py` / `pipeline.py` simulate blur and correction. |
+| `hardware/eye_capture.py` | **Runs on the Pi.** Takes the eye photos. |
+| `scripts/measure_eye.py` | **Runs on the Mac.** Reads the photos and gives your prescription. |
+| `scripts/generate_dataset.py`, `train.py`, `report.py` | Make the training photos, train the network, plot how it did. |
+| `scripts/validate_photorefraction.py` | Checks the simulator against a published paper. |
+| `scripts/make_eye_figures.py` | Draws what your photos should look like (pictures below). |
+| `checkpoints/best.pt` | The trained network. |
+| `examples/` | Pictures of the blur / correction simulation. |
+| `web/` | Separate web demo (upload a photo, see it blurred). |
+| `hardware/alvarez_doc/`, `proposal/` | Write-ups. |
 
-- **Sensing** — CNNs predicting (S, C, axis) from eccentric photorefraction images are published and clinically validated (one 2025 system trained on 362k images).
-- **Correction** — electronically tunable liquid-crystal glasses are funded and shipping prototypes (IXI raised ~$36M; Morrow, Laclarée, Deep Optics).
-- **Pre-distortion displays** — Berkeley/MIT light-field "vision-correcting displays" and inverse-blur deconvolution are well-published and patented.
+---
 
-What is **not** yet a product: a wearable that **closes the full loop** — *senses* refraction objectively, *drives* tunable correction, *re-measures* residual blur, and *self-converges* — driven by measured refractive error rather than by gaze/distance. This integration is a sensing + optimization + control problem.
+## The one thing to understand first: the blind band
 
-## The system as a control loop
+The camera can only see your eye's focus *relative to the camera*. If your
+eye happens to be focused near the camera, no returning light makes it into
+the lens and the pupil stays black. That happens for a whole range of
+prescriptions, the **blind band**. It's centred on −100/(distance in cm) D
+(−2.7 D at 37 cm, about −3.4 D in glasses terms), and with an 8 mm pupil at
+37 cm it runs from about **−5.5 to +1 D**. Most people fall inside it, which
+is why your first photo came out blank.
 
-```
-[Sensor: measure refractive error]  ->  [Estimator: signal -> (S,C,axis)]
-        ^                                          |
-        |                                          v
-[Feedback: residual blur]  <-  [Actuator: tunable lens]  <-  [Controller: (S,C,axis) -> voltages]
-```
+The fix is a **trial lens** in front of your eye. The camera sees your eye
+plus the lens as one eye, so the lens moves you out of the blind band. The
+script then subtracts the lens. With a lens, any distance from 25 cm to 1 m
+works, so you can stay close.
 
+![H frame as eye + lens changes](docs/figures/sweep_frames.png)
 
-## Roadmap
+*What the H frame looks like at 37 cm. The number is your prescription minus
+the trial lens. Blue = crescent on the LED's side, grey = blind band,
+orange = crescent on the far side.*
 
-- [x] **Step 1 — eye-blur simulator** (this release): prescription → Zernike wavefront → PSF → blurred image. Physics validated by tests.
-- [x] **Step 2 — pre-distortion display demo**: deconvolve an image by the eye's PSF so a blurry eye sees it sharp. Pure software, great standalone result.
-- [x] **Step 3 — closed-loop optimizer (in sim)**: maximize an image-sharpness objective over (S,C,axis) / voltage space using gradient-free optimization (Nelder–Mead / Bayesian / CMA-ES). The core IP.
-- [ ] **Step 4 — photorefraction estimator**: synthesize eccentric-photorefraction images from the simulator, train a CNN to regress (S,C,axis), validate on real images.
-- [ ] **Step 5 — benchtop hardware**: off-the-shelf tunable lens + IR camera, close the loop on a bench (not wearable).
-- [ ] **Step 6 — clinical validation** against a real autorefractor (requires a vision-science partner; this is also the regulatory line).
-- [ ] **Step 7 — wearable form factor** (last, not first).
+![crescent position](docs/figures/side_curve.png)
 
-## Install
+*Where the crescent sits. The bigger your pupil, the narrower the blind band,
+so keep the room dark.*
+
+---
+
+# Part 1: on the Raspberry Pi
+
+### Pi step 1: pick the camera and check it sees infrared
+
+The method needs a camera **without an IR-cut filter**:
+
+- **IMX708 NoIR (Camera Module 3 NoIR, your old one): use this today.** It
+  sees 850 nm and its LEDs are already mounted 10 mm from the lens.
+- **Arducam IMX477 HQ:** the listing says it has a built-in 650 nm IR filter,
+  so it probably can't see your LEDs. Test it below before mounting anything.
+  If it's blocked, you can remove the filter (permanent, ends the return), or
+  return it for a NoIR / IR-cut-switch version.
+
+Test with the camera plugged in (step 2 first):
 
 ```bash
-git clone <your-repo-url> eyesim && cd eyesim
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[viz,dev]"
+python3 eye_capture.py --check
 ```
 
-## Quickstart
+Then open `check_H.png` and point the LED at the camera. A bright spot means
+it sees infrared. If the H frame is no brighter than the dark one, the script
+says so.
+
+### Pi step 2: install
+
+```bash
+sudo apt update
+sudo apt install -y python3-picamera2 python3-serial python3-scipy python3-pil python3-numpy
+mkdir -p ~/eyesim
+```
+
+From the Mac, copy the script over:
+
+```bash
+scp hardware/eye_capture.py pi@<pi-address>:~/eyesim/
+```
+
+The Arduino keeps the sketch you already have: it takes `H1`, `H0`, `V1`,
+`V0` lines over serial at 115200 baud and replies with one line each time. If
+it isn't on `/dev/ttyUSB0`, change `SERIAL_PORT` at the top of the script
+(`ls /dev/ttyUSB* /dev/ttyACM*` shows it).
+
+### Pi step 3: LEDs
+
+- **H LED: to the right of the lens, level with it. V LED: directly above
+  it.** Right/above as seen *in the photo*. If yours is mirrored, the Mac
+  script takes `--hflip` / `--vflip`.
+- The LEDs should be level with the front of the lens, pointing at the eye.
+- If you can't attach them to the camera, use a piece of black foam board
+  with a hole for the lens and two pin holes for the LEDs. Wrap the LED sides
+  in black tape so no light leaks straight into the lens. Clamp the board
+  flush against the lens front.
+
+### Pi step 4: measure the rig and write `rig.json`
+
+Make `~/eyesim/rig.json`:
+
+```json
+{"ecc_h_mm": 10.0, "ecc_v_mm": 10.0, "aperture_mm": 2.6, "dist_cm": 37}
+```
+
+| Key | What to measure | Allowed range |
+|---|---|---|
+| `ecc_h_mm`, `ecc_v_mm` | Centre of the lens to centre of each LED, with calipers | 6–20 mm |
+| `aperture_mm` | Lens opening = focal length ÷ f-number. IMX708: 4.74/1.8 = **2.6**. HQ 16 mm lens at f/5.6: **2.9**. HQ 6 mm lens at f/2: **3.0** | 1.5–4.5 mm |
+| `dist_cm` | Front of the camera lens to the front of your eye (cornea) | 25–100 cm |
+
+If anything is outside the allowed range, the network wasn't trained on it.
+For the IMX708 use **30–37 cm**: farther away the pupil gets too few pixels.
+The HQ camera with the 16 mm lens can go to 60 cm or more.
+
+### Pi step 5: focus
+
+- **IMX708:** nothing to do. The script focuses at `dist_cm` itself.
+- **HQ camera:** `python3 eye_capture.py --focus`, hold some small print where
+  your eye will be, turn the focus ring until the number peaks, and lock the
+  ring.
+
+### Pi step 6: ruler photo (pixel scale)
+
+Hold a mm ruler exactly where your eye will be, then:
+
+```bash
+python3 eye_capture.py --scale
+```
+
+Copy `scale_H.npy` to the Mac (Mac step 2 turns it into a number for `rig.json`).
+
+### Pi step 7: brightness check with your eye
+
+Sit at `dist_cm`, then:
+
+```bash
+python3 eye_capture.py --check
+```
+
+Open `check_H.png`. Your eye should be sharp and in the middle, and you
+should see a small bright dot on the cornea (the glint). In the printout, the
+H line should **not** show a lot of clipping. If the pupil is pitch black
+everywhere, raise `--gain` (up to 16) or `--exposure-us` (up to 30000). If
+large areas are white, lower them. Use the same values for every session.
+
+### Pi step 8: take the sessions
+
+How to sit:
+- **Dark room**, so your pupil is big (6–8 mm). The LEDs are invisible.
+- Rest your chin on something so the distance stays at `dist_cm`.
+- **Keep both eyes open and look at a small light at least 4 m away, just past
+  the camera.** Never look into the camera: focusing on it fakes about −2.7 D
+  of myopia.
+- Glasses and contacts off. Put the trial lens in a trial frame (or hold it)
+  about 12 mm in front of the eye, **tilted about 10°** so its own reflection
+  misses your pupil.
+
+Then take one session per lens:
+
+```bash
+python3 eye_capture.py --eye right --lens 0
+python3 eye_capture.py --eye right --lens +1
+python3 eye_capture.py --eye right --lens +2
+# ... keep going up in +1 D steps
+```
+
+**Which lenses:** go up in **plus** lenses from 0 in 1 D steps until the
+crescent shows up on the **LED side** (H frame: right side of the pupil,
+`preview_H.png`), then do two more. Then fill in **0.5 D steps** around where
+it appeared. Use plus lenses, not minus: your eye can cancel an over-strong
+minus lens by focusing harder, which ruins the reading, but it can't cancel a
+plus lens.
+
+Rough guide at 37 cm: the crescent appears once the lens is about
+**your sphere + 6 D** (−2 → about +4, −4 → about +2, −6 → about 0). A
+hyperope (+2 or more) already shows a far-side crescent with no lens. For
+astigmatism, add `--cyl` and `--axis` for any cylinder lens you put in.
+
+Each session is a folder like `eyes/20261102-2310-right-37cm-S+3`.
+
+### Pi step 9: copy to the Mac
+
+```bash
+scp -r pi@<pi-address>:~/eyesim/eyes ~/Desktop/eyesim/data/
+scp pi@<pi-address>:~/eyesim/scale_H.npy ~/Desktop/eyesim/data/
+```
+
+---
+
+# Part 2: on the Mac
+
+Use the Anaconda Python (`/opt/anaconda3/bin/python`), which has torch. The
+repo's `.venv` is on iCloud and can be very slow to load.
+
+### Mac step 1: install (once)
+
+```bash
+cd ~/Desktop/eyesim
+/opt/anaconda3/bin/python -m pip install -e ".[viz,ml,dev]"
+```
+
+### Mac step 2: pixel scale from the ruler photo
+
+```bash
+/opt/anaconda3/bin/python scripts/measure_eye.py --calibrate-scale data/scale_H.npy --dist-cm 37
+```
+
+Click two ruler marks far apart and type how many mm apart they are. It prints
+`"px_per_mm": ..., "px_per_mm_dist_mm": ...`. Add both to `rig.json` **on
+the Pi** before taking the sessions (sessions save the scale at capture
+time). If you already took sessions, add the two numbers to each session's
+`meta.json` instead.
+
+### Mac step 3: get your prescription
+
+```bash
+/opt/anaconda3/bin/python scripts/measure_eye.py data/eyes/*right* --age 21 --known "-2.25 -0.50 x 180"
+```
+
+`--known` is your real glasses prescription, if you have it, so it can show
+the error. `--age` tells it how much your eye can focus through a minus lens.
+
+The first time, each session opens a window. **Click the pupil once, then 3
+points on its edge**, then click anywhere to accept the cyan circle. Clicks
+are saved, so later runs don't ask again (`--reclick` to redo).
+
+### Reading the output
+
+For each session:
+- `crescent: H +0.40 LED side ...`: where the crescent is. `none (dark)`
+  means that lens left you in the blind band.
+- `DARK ZONE`: no crescent, so the network's number is a guess and gets
+  skipped.
+- Any `WARNING ... outside what the network was trained on`: fix the rig or
+  retrain.
+
+At the end:
+- `CNN, glasses (12 mm)`: the network's answer, averaged over usable sessions.
+- `lens sweep, horizontal / vertical`: the no-network answer for each LED
+  direction, with a ± range. If it says "not pinned down yet", it tells you
+  which lenses to add.
+- `lens sweep, combined`: both directions together. It gives sphere and
+  0/90° astigmatism only; two LEDs can't see oblique (45°) astigmatism.
+- `CNN error` / `lens-sweep error`: only with `--known`.
+
+It also saves `result.png` in the first session folder: your photo next to
+what the simulator draws for the network's answer (and for your known
+prescription). If they look alike, the answer is believable.
+
+**What counts as good:** two clinicians measuring the same eye usually agree
+within about 0.5 D, so getting within ±0.5 D of your real prescription is a
+success.
+
+### If something's off
+
+| What you see | What to do |
+|---|---|
+| Every session dark | Keep adding plus lenses; make the room darker |
+| Crescent on the LED side even with no lens | You're very myopic for this distance: add minus lenses in 1 D steps until it disappears |
+| H and V answers far apart but you have no astigmatism | Check `ecc_h_mm`/`ecc_v_mm`, and that the LEDs really are right/above in the photo (else `--hflip`/`--vflip`) |
+| "eye moved" more than ~20 px | Steadier chin rest; retake |
+| `brightness x200` | The photo is far too dark: raise gain / exposure |
+| "the glint is clipped" | Fine unless the pupil is clipped too; then lower gain |
+
+### Retraining the network (optional)
+
+The network in `checkpoints/best.pt` is trained on simulated photos covering
+distances of 25–100 cm, LED offsets of 6–20 mm and lens openings of
+1.5–4.5 mm. That covers both cameras. To retrain (about an hour to make the
+data and 1.5 hours to train):
+
+```bash
+/opt/anaconda3/bin/python scripts/generate_dataset.py          # -> data/train_set
+/opt/anaconda3/bin/python scripts/train.py                     # -> checkpoints/
+/opt/anaconda3/bin/python scripts/report.py                    # -> checkpoints/report.png
+/opt/anaconda3/bin/python -m pytest -q                         # physics checks
+```
+
+To see the expected photos for your exact rig:
+
+```bash
+/opt/anaconda3/bin/python scripts/make_eye_figures.py --dist-cm 37 --ecc-mm 10 --aperture-mm 2.6
+```
+
+---
+
+## The simulation side
+
+Separately from measuring, `eyesim` simulates what a prescription does to
+vision and how a tunable lens would correct it:
+
+```bash
+/opt/anaconda3/bin/python examples/visualize_pipeline.py   # blur, pre-distortion, optimizer, photos
+/opt/anaconda3/bin/python examples/full_pipeline.py        # whole loop for one eye + a group of eyes
+```
 
 ```python
 from eyesim import simulate_vision
-import numpy as np
-
-image = np.random.rand(256, 256)          # any grayscale image in [0,1]
 seen, psf = simulate_vision(image, S=-2.0, C=-1.0, theta_deg=45)
 ```
 
-CLI:
+## License
 
-```bash
-python examples/simulate.py --demo --S -2.0 --C -1.0 --axis 45
-python examples/simulate.py --image photo.png --S -1.5
-```
-
-Run the physics tests:
-
-```bash
-pytest -q
-```
-
-## Step 3 — closed-loop optimizer
-
-`eyesim.optimize` implements the core control loop. Given a test image and a
-simulated eye prescription, `run_closed_loop` uses a two-stage search to find
-the tunable-lens correction that maximises retinal sharpness:
-
-1. **Coarse sphere scan** — sweeps M (spherical equivalent) from −5 to +5 D in
-   0.5 D steps with J0/J45 held at zero. Identifies the correct basin without
-   being misled by astigmatic local optima.
-2. **Nelder-Mead refinement** — starts from the best M found and refines all
-   three power-vector components (M, J0, J45) with a ±0.5 D initial simplex.
-
-Results on a 128×128 isotropic test image (`grid=64`, `psf_crop=32`):
-
-| Prescription | M_corr | J0_corr | J45_corr | Improvement | Iters |
-|---|---|---|---|---|---|
-| −1.5 D sphere | +1.5000 | 0.000 | 0.000 | 25.5 dB | 58 |
-| −1.5/−0.5/30° | +1.7500 | −0.125 | −0.217 | 26.1 dB | 53 |
-
-```python
-from eyesim import run_closed_loop
-import numpy as np
-
-n = 128
-x = np.arange(n)
-xx, yy = np.meshgrid(x, x)
-img = np.zeros((n, n))
-for angle in range(0, 180, 30):
-    rad = np.radians(angle)
-    img += np.sin(2 * np.pi * (4 * np.cos(rad) * xx / n + 4 * np.sin(rad) * yy / n))
-img = np.clip(img / np.abs(img).max() * 0.35 + 0.5, 0, 1).astype(np.float32)
-
-result = run_closed_loop(-1.5, -0.5, 30.0, img)
-print(result["S_estimate"], result["C_estimate"], result["axis_estimate"])
-# -1.5  -0.5  30.0
-```
-
-**Image note**: the optimizer needs a spatially isotropic test image — one with
-edge content at multiple orientations. A directional sinusoid creates
-orientation-specific local optima in the astigmatism axes. A sum of sinusoids
-at 30° intervals (as above) works well.
+MIT. **Not a medical device.**

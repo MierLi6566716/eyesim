@@ -1,0 +1,40 @@
+.grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.disclaimer {
+  font-size: 13.5px;
+  color: var(--fg-dim);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.or {
+  text-align: center;
+  font-size: 13px;
+  color: var(--fg-faint);
+  margin: 10px 0;
+}
+
+.thumb {
+  width: 100%;
+  margin-top: 12px;
+  max-height: 160px;
+  object-fit: contain;
+  background: #000;
+}

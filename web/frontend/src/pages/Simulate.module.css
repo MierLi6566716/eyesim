@@ -1,0 +1,39 @@
+.grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.thumb {
+  width: 100%;
+  margin-top: 12px;
+  max-height: 160px;
+  object-fit: contain;
+  background: #000;
+}
+
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.presets button {
+  text-align: left;
+  font-size: 13px;
+  padding: 6px 10px;
+}
