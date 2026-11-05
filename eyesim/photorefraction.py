@@ -340,13 +340,16 @@ def _lashes(rng, n, count):
 
 # ------------------------------------------------------------------ sampling
 
-def sample_eye(rng: np.random.Generator) -> Eye:
+M_RANGE_D = (-9.0, 5.0)              # refraction (850 nm, eye + any trial lens) the network learns
+
+
+def sample_eye(rng: np.random.Generator, m_range=M_RANGE_D) -> Eye:
     """Draw one human eye: refraction plus the optics that differ between people."""
     # Refraction: half spread evenly, half like a real population.
     if rng.random() < 0.5:
-        M = rng.uniform(-9.0, 5.0)
+        M = rng.uniform(*m_range)
     else:
-        M = float(np.clip(rng.normal(-1.0, 2.5), -9.0, 5.0))
+        M = float(np.clip(rng.normal(-1.0, 2.5), *m_range))
     if rng.random() < 0.25:
         J0 = J45 = 0.0
     else:

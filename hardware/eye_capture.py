@@ -18,6 +18,7 @@ filter (run --check to find out).
   python3 eye_capture.py --eye right --lens 0            # a session with no trial lens
   python3 eye_capture.py --eye right --lens +3           # +3.00 D trial lens in front of the eye
   python3 eye_capture.py --eye right --lens -2 --cyl -1 --axis 90
+  python3 eye_capture.py --eye model --true-rx -3 --pupil-mm 6 --shots 10   # model eye, dial at -3 D
 
 Your rig's measurements go in rig.json next to this script (see README):
   {"ecc_h_mm": 10.0, "ecc_v_mm": 10.0, "aperture_mm": 2.6, "dist_cm": 37,
@@ -33,7 +34,8 @@ from pathlib import Path
 import numpy as np
 import serial
 
-SERIAL_PORT = "/dev/ttyUSB0"
+# The Arduino shows up as ttyACM0 (Uno R3 / Leonardo) or ttyUSB0 (clones with a CH340).
+SERIAL_PORT = next((p for p in ("/dev/ttyACM0", "/dev/ttyUSB0") if Path(p).exists()), "/dev/ttyUSB0")
 BAUD = 115200
 RIG = Path(__file__).with_name("rig.json")
 
@@ -133,7 +135,9 @@ def focus_loop(cam):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--eye", choices=["right", "left"], default="right")
+    ap.add_argument("--eye", choices=["right", "left", "model"], default="right")
+    ap.add_argument("--true-rx", type=float, default=None, help="model eye: refraction set on its dial, D")
+    ap.add_argument("--pupil-mm", type=float, default=None, help="model eye: pupil (aperture) diameter, mm")
     ap.add_argument("--lens", type=float, default=0.0, help="trial lens SPHERE in front of the eye, D")
     ap.add_argument("--cyl", type=float, default=0.0, help="trial lens CYLINDER, D")
     ap.add_argument("--axis", type=float, default=0.0, help="cylinder axis as read on the trial frame, deg")
@@ -182,7 +186,13 @@ def main():
                           "LEDs. Check the wiring, or the camera has an IR-cut filter (README, Pi step 1).")
             return
 
+        if args.eye == "model" and args.true_rx is None:
+            raise SystemExit("--eye model needs --true-rx (the number on the model eye's dial)")
         name = time.strftime("%Y%m%d-%H%M%S-") + "%s-%dcm-S%+g" % (args.eye, round(dist_cm), args.lens)
+        if args.true_rx is not None:
+            name += "-true%+g" % args.true_rx
+        if args.pupil_mm:
+            name += "-p%gmm" % args.pupil_mm
         if args.cyl:
             name += "C%+gx%03.0f" % (args.cyl, args.axis)
         folder = Path(args.out) / name
@@ -207,6 +217,7 @@ def main():
             "lens_d": args.lens, "lens_cyl": args.cyl, "lens_axis": args.axis, "vertex_mm": args.vertex_mm,
             "exposure_us": args.exposure_us, "gain": args.gain, "shots": args.shots,
             "camera": cam.model, "white_level": cam.white, "seconds": round(took, 2),
+            "true_rx": args.true_rx, "pupil_mm": args.pupil_mm,
             "note": args.note, "taken": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2))
         print("saved %s  (%.1f s for %d shots)" % (folder, took, args.shots))
     finally:

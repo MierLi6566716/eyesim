@@ -54,6 +54,9 @@ def load_frame(path, white, hflip, vflip):
     """Linear grey float32, 1.0 = sensor full scale."""
     if path.suffix == ".npy":
         lin = np.load(path).astype(np.float32) / white
+    elif path.suffix == ".npz":                 # packed by scripts/pack_sessions.py (lossless)
+        with np.load(path) as z:
+            lin = z["frame"].astype(np.float32) / white
     else:                                   # old rpicam-still PNG sessions: undo the tone curve
         from PIL import Image
         g = np.asarray(Image.open(path).convert("RGB"), np.float32).mean(-1) / 255.0
@@ -66,8 +69,11 @@ def load_frame(path, white, hflip, vflip):
 
 
 def frame_path(session, k, ch):
-    p = session / f"{k:02d}_{ch}.npy"
-    return p if p.exists() else session / f"{k:02d}_{ch}.png"
+    for ext in (".npy", ".npz"):
+        p = session / f"{k:02d}_{ch}{ext}"
+        if p.exists():
+            return p
+    return session / f"{k:02d}_{ch}.png"
 
 
 def fit_circle(pts):
@@ -256,8 +262,8 @@ def measure(session, model, cfg, args):
 
     # Track the eye by its corneal glint; refine the clicked circle on the
     # average of all glint-aligned frames.
-    gx0, gy0 = glint(frames[0][1], cx, cy, 1.5 * r_px)
-    pos = [[glint(img, gx0, gy0, 2.5 * r_px) for img in pair] for pair in frames]
+    gx0, gy0 = glint(frames[0][1], cx, cy, 1.0 * r_px)
+    pos = [[glint(img, gx0, gy0, 1.3 * r_px) for img in pair] for pair in frames]
     # Each LED puts its glint at a slightly different place on the cornea. The
     # mean H-minus-V glint offset over all shots is that LED effect (eye motion
     # between frames averages out); remove it, then fit one pupil circle on
@@ -285,7 +291,7 @@ def measure(session, model, cfg, args):
 
     if meta.get("px_per_mm"):
         px_per_mm = meta["px_per_mm"] * meta.get("px_per_mm_dist_mm", d) / d
-    elif frame_path(session, 0, "H").suffix == ".npy":
+    elif frame_path(session, 0, "H").suffix in (".npy", ".npz"):
         raise SystemExit(f"{session}: no px_per_mm in meta.json. Do the ruler calibration (README, Mac step 2).")
     else:
         px_per_mm = args.focal_mm / ((d - args.focal_mm) * args.pixel_um * 1e-3)
@@ -308,6 +314,8 @@ def measure(session, model, cfg, args):
                     shot_id.append(k)
     with torch.no_grad():
         out = model(torch.from_numpy(np.stack(xs)), torch.from_numpy(np.stack(auxs))).numpy()
+    if getattr(model, "m_only", False):                # trained for the spherical equivalent only
+        out[:, 1:] = 0.0
     shot_id = np.array(shot_id)
     per_shot = np.array([np.median(out[shot_id == k], 0) for k in range(len(frames))])
     sys_ir = np.median(per_shot, 0)                     # eye + trial lens, IR, image frame
@@ -467,7 +475,9 @@ def main():
     ck = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     model = PupilNet(**ck["model_kwargs"]).eval()
     model.load_state_dict(ck["model_state_dict"])
+    model.m_only = bool(ck.get("m_only", False))
     cfg = ck.get("dataset_config", {})
+    m_lo, m_hi = cfg.get("m_range_d", (-9.0, 5.0))
 
     res = [measure(Path(s), model, cfg, args) for s in sorted(args.sessions)]
     for r in res:                                       # mirror flip: J45 changes sign
@@ -476,10 +486,11 @@ def main():
 
     print("\n================ your eye (visible light) ================")
     # The CNN is only trusted with a crescent present and eye + lens inside its
-    # training labels (IR, -9..+5 D; the signal saturates near the ends).
-    good = [r for r in res if not r["dark"] and -8.0 <= r["sys_ir"][0] <= 4.0]
+    # training labels (IR; the signal saturates near the ends, so keep 1 D clear).
+    good = [r for r in res if not r["dark"] and m_lo + 1 <= r["sys_ir"][0] <= m_hi - 1]
     if len(good) < len([r for r in res if not r["dark"]]):
-        print("  (sessions where eye + lens reads beyond -8..+4 D left out of the CNN result: outside training)")
+        print(f"  (sessions where eye + lens reads beyond {m_lo + 1:+.0f}..{m_hi - 1:+.0f} D left out of the CNN "
+              "result: outside training)")
     if good:
         # A lens more minus than the eye needs is cancelled by focusing, which
         # makes the CNN read the eye too myopic: drop those sessions.
@@ -493,7 +504,9 @@ def main():
         M, J0, J45 = ir_to_visible(float(e[0])), float(e[1]), float(e[2])
         print(f"  CNN, at the eye       {fmt(M, J0, J45)}   from {len(good)} of {len(res)} sessions")
         print(f"  CNN, glasses (12 mm)  {fmt(*to_glasses(M, J0, J45))}")
-        if abs(to_rx(M, J0, J45)[1]) < 0.5:
+        if model.m_only:
+            print("  (this network gives the spherical equivalent only: sphere + half the cylinder)")
+        elif abs(to_rx(M, J0, J45)[1]) < 0.5:
             print("  (cylinder under 0.50 D is within the network's noise)")
     else:
         print("  CNN: every session was in its dark zone; no measurement. Add trial-lens sessions.")
@@ -514,7 +527,8 @@ def main():
         print(f"  your known Rx         {fmt(Mk, J0k, J45k)}   (glasses)")
         if good:
             Ms, J0s, J45s = to_glasses(M, J0, J45)
-            print(f"  CNN error             {Ms - Mk:+.2f} D in M, {np.hypot(J0s - J0k, J45s - J45k):.2f} D astigmatism")
+            print(f"  CNN error             {Ms - Mk:+.2f} D in M"
+                  + ("" if model.m_only else f", {np.hypot(J0s - J0k, J45s - J45k):.2f} D astigmatism"))
         if all(isinstance(v, tuple) for v in neut.values()):
             print(f"  lens-sweep error      {to_glasses(Mn, J0n, 0.0)[0] - Mk:+.2f} D in M")
     print("==========================================================")

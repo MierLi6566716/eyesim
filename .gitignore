@@ -17,3 +17,6 @@ web/.env
 !.env.example
 web/backend/_local_storage/
 web/backend/*.db
+
+# model-eye raw photos (large); results/ is tracked
+model_eye/sessions/

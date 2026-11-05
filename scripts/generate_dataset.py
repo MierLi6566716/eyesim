@@ -31,23 +31,37 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from eyesim.photorefraction import (
-    APERTURE_RANGE_MM, D_RANGE_MM, ECC_RANGE_MM, aux_vector, render_pair, sample_eye, sample_geometry,
-    sample_scene,
+    APERTURE_RANGE_MM, D_RANGE_MM, ECC_RANGE_MM, I_REF, M_RANGE_D, aux_vector, reflex, render_pair, sample_eye,
+    sample_geometry, sample_scene,
 )
 
 META_COLUMNS = ["d_mm", "ecc_mm", "aperture_mm", "pupil_r_mm", "sa_d_per_mm2", "scatter_mrad", "exposure",
                 "reflex_peak"]
 
 
+VISIBLE_PEAK = 0.15      # same threshold as train.py
+
+
+def _is_dark(eye, geom, scene):
+    """Cheap low-resolution check: would this sample sit in the blind band?"""
+    I, _, _ = reflex(eye, geom, 24, scene.fill, scene.centre_frac, n_entry=80)
+    return float(I.max()) * scene.exposure / I_REF < VISIBLE_PEAK
+
+
 def _work(job):
-    seed, n, size = job
+    seed, n, size, m_range, dark_keep = job
     rng = np.random.default_rng(seed)
     images = np.empty((n, size, size, 2), np.uint8)
     labels = np.empty((n, 3), np.float32)
     aux = np.empty((n, 4), np.float32)
     meta = np.empty((n, len(META_COLUMNS)), np.float32)
     for i in range(n):
-        eye, geom, scene = sample_eye(rng), sample_geometry(rng), sample_scene(rng, size)
+        while True:
+            eye, geom, scene = sample_eye(rng, m_range), sample_geometry(rng), sample_scene(rng, size)
+            # Blind-band photos carry no refraction; skip most of them so the
+            # render time goes to photos with a crescent.
+            if dark_keep >= 1.0 or rng.random() < dark_keep or not _is_dark(eye, geom, scene):
+                break
         img, peak = render_pair(eye, geom, scene, rng, return_peak=True)
         aperture = 2.0 * geom.aperture_r_mm
         images[i] = np.round(img * 255.0).astype(np.uint8)
@@ -68,6 +82,10 @@ def main():
     ap.add_argument("--chunk", type=int, default=2000)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="data/train_set")
+    ap.add_argument("--m-min", type=float, default=M_RANGE_D[0], help="most myopic refraction (850 nm, D)")
+    ap.add_argument("--m-max", type=float, default=M_RANGE_D[1], help="most hyperopic refraction (850 nm, D)")
+    ap.add_argument("--dark-keep", type=float, default=1.0,
+                    help="share of blind-band samples to keep (1 = all; 0.3 spends the time on crescents)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -85,7 +103,8 @@ def main():
             labels = np.empty((n, 3), np.float32)
             aux = np.empty((n, 4), np.float32)
             meta = np.empty((n, len(META_COLUMNS)), np.float32)
-            jobs = [(int(next(seeds)), min(args.chunk, n - s), args.size) for s in range(0, n, args.chunk)]
+            jobs = [(int(next(seeds)), min(args.chunk, n - s), args.size, (args.m_min, args.m_max), args.dark_keep)
+                    for s in range(0, n, args.chunk)]
             pos = 0
             for im, lb, ax, mt in pool.imap(_work, jobs):
                 k = len(lb)
@@ -103,7 +122,8 @@ def main():
 
     (out / "config.json").write_text(json.dumps({
         **vars(args), "splits": splits, "meta_columns": META_COLUMNS,
-        "d_range_mm": D_RANGE_MM, "ecc_range_mm": ECC_RANGE_MM, "aperture_range_mm": APERTURE_RANGE_MM},
+        "d_range_mm": D_RANGE_MM, "ecc_range_mm": ECC_RANGE_MM, "aperture_range_mm": APERTURE_RANGE_MM,
+        "m_range_d": [args.m_min, args.m_max]},
         indent=2))
     print(f"Done in {(time.time() - t0) / 60:.1f} min -> {out}")
 

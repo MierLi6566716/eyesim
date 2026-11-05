@@ -38,7 +38,14 @@ class Split:
         self.n = len(self.labels)
 
     def batches(self, batch, shuffle, device):
-        order = np.random.permutation(self.n) if shuffle else np.arange(self.n)
+        if shuffle:
+            # Shuffle within blocks of nearby samples, and the block order, so
+            # reads from the memory-mapped file stay local (RAM-friendly).
+            block = 16384
+            starts = np.random.permutation(np.arange(0, self.n, block))
+            order = np.concatenate([np.random.permutation(np.arange(s, min(s + block, self.n))) for s in starts])
+        else:
+            order = np.arange(self.n)
         for s in range(0, self.n, batch):
             idx = np.sort(order[s:s + batch])          # sorted reads are kinder to the memmap
             # HWC -> CHW on the CPU. Permuting on an MPS device leaves a
@@ -48,12 +55,56 @@ class Split:
             yield x, self.aux[idx].to(device), self.labels[idx].to(device), idx
 
 
-def augment(x):
-    """Small framing and sensor jitter on top of what the simulator already varies."""
+def _blur(x, kernel):
+    """Convolve every channel with one 2-D kernel (k x k), keeping the size."""
+    k = kernel.shape[-1]
+    w = kernel.to(x.device, x.dtype).expand(x.shape[1], 1, k, k).contiguous()
+    return torch.nn.functional.conv2d(torch.nn.functional.pad(x, [k // 2] * 4, mode="replicate"), w,
+                                      groups=x.shape[1])
+
+
+def _gauss_kernel(sigma):
+    r = max(1, int(np.ceil(2.5 * sigma)))
+    t = np.arange(-r, r + 1)
+    g = np.exp(-t ** 2 / (2 * sigma ** 2))
+    k = np.outer(g, g)
+    return torch.from_numpy((k / k.sum()).astype(np.float32))
+
+
+def _motion_kernel(length, angle):
+    """A short line: the eye drifting during the exposure, or frames averaged with small misalignment."""
+    n = int(np.ceil(length)) | 1
+    k = np.zeros((n, n), np.float32)
+    c = n // 2
+    for t in np.linspace(-length / 2, length / 2, 4 * n):
+        k[int(round(c - t * np.sin(angle))), int(round(c + t * np.cos(angle)))] += 1
+    return torch.from_numpy(k / k.sum())
+
+
+def augment(x, strong=True):
+    """
+    Framing and sensor jitter on top of what the simulator varies. ``strong``
+    adds what real photos showed (November 2026) and the simulator lacked:
+    softer, smeared crescents, one LED dimmer than the other, more noise.
+    """
     b = x.shape[0]
     dx, dy = np.random.randint(-2, 3, 2)
     x = torch.roll(x, shifts=(int(dy), int(dx)), dims=(2, 3))
     x = x * torch.empty(b, 1, 1, 1, device=x.device).uniform_(0.85, 1.15)
+    if strong:
+        # One LED weaker than the other (different aim / brightness), per sample.
+        weak = torch.rand(b, device=x.device) < 0.6
+        ch = torch.randint(0, 2, (b,), device=x.device)
+        g = torch.ones(b, 2, device=x.device)
+        g[torch.arange(b, device=x.device), ch] = torch.where(
+            weak, torch.empty(b, device=x.device).uniform_(0.35, 1.0), torch.ones(b, device=x.device))
+        x = x * g[:, :, None, None]
+        # Extra lens defocus and motion smear; one kernel per batch keeps it fast.
+        if np.random.rand() < 0.7:
+            x = _blur(x, _gauss_kernel(np.random.uniform(0.5, 2.5)))
+        if np.random.rand() < 0.4:
+            x = _blur(x, _motion_kernel(np.random.uniform(2.0, 7.0), np.random.uniform(0, np.pi)))
+        x = x + torch.empty(b, 1, 1, 1, device=x.device).uniform_(0.0, 0.03) * torch.randn_like(x)
     x = x + 0.01 * torch.randn_like(x)
     return x.clamp(0.0, 1.0)
 
@@ -99,6 +150,10 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-3)
     ap.add_argument("--wd", type=float, default=1e-4)
     ap.add_argument("--out", default="checkpoints")
+    ap.add_argument("--init", default=None, help="checkpoint to start from (fine-tuning) instead of random weights")
+    ap.add_argument("--m-only", action="store_true",
+                    help="learn the spherical equivalent M only; astigmatism stays in the photos as a nuisance")
+    ap.add_argument("--light-augment", action="store_true", help="the old, mild augmentation")
     args = ap.parse_args()
 
     device = (torch.device("cuda") if torch.cuda.is_available() else
@@ -113,10 +168,17 @@ def main():
     aux_dim = train.aux.shape[1]
     model = PupilNet(image_size=size, aux_dim=aux_dim, input_norm=True).to(device)
     print(f"PupilNet  {count_parameters(model):,} parameters")
+    if args.init:
+        model.load_state_dict(torch.load(args.init, map_location=device, weights_only=False)["model_state_dict"])
+        print(f"starting from {args.init}")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
     steps = args.epochs * ((train.n + args.batch - 1) // args.batch)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=steps, pct_start=0.1)
-    loss_fn = nn.SmoothL1Loss(beta=0.5)
+    smooth = nn.SmoothL1Loss(beta=0.5)
+    if args.m_only:
+        loss_fn = lambda p, y: smooth(p[:, 0], y[:, 0])
+    else:
+        loss_fn = smooth
 
     log = out / "train_log.csv"
     log.write_text("epoch,train_loss,val_loss,M_mae,J0_mae,J45_mae,M_mae_visible,elapsed_s\n")
@@ -126,7 +188,7 @@ def main():
         tot = 0.0
         for x, aux, y, _ in train.batches(args.batch, True, device):
             opt.zero_grad()
-            loss = loss_fn(model(augment(x), aux), y)
+            loss = loss_fn(model(augment(x, strong=not args.light_augment), aux), y)
             loss.backward()
             opt.step()
             sched.step()
@@ -146,6 +208,7 @@ def main():
             best = vloss
             torch.save({"epoch": epoch, "model_state_dict": model.state_dict(), "val_loss": vloss,
                         "mae": a, "model_kwargs": {"image_size": size, "aux_dim": aux_dim, "input_norm": True},
+                        "m_only": args.m_only,
                         "dataset_config": json.loads((root / "config.json").read_text())},
                        out / "best.pt")
 

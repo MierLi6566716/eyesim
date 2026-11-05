@@ -48,6 +48,9 @@ This is a visualization of the physics and math behind the eysim project:
 | `hardware/eye_capture.py` | **Runs on the Pi.** Takes the eye photos. |
 | `scripts/measure_eye.py` | **Runs on the Mac.** Reads the photos and gives your prescription. |
 | `scripts/generate_dataset.py`, `train.py`, `report.py` | Make the training photos, train the network, plot how it did. |
+| `model_eye/` | **Model-eye test.** Step-by-step instructions (`model_eye/README.md`), the Pi sweep helper, results. |
+| `scripts/model_eye_report.py` | Network vs model-eye dial, real vs simulated blind band, pixel-scale check. |
+| `scripts/pack_sessions.py` | Compresses session photos about 2.5x without loss. |
 | `scripts/validate_photorefraction.py` | Checks the simulator against a published paper. |
 | `scripts/make_eye_figures.py` | Draws what your photos should look like (pictures below). |
 | `checkpoints/best.pt` | The trained network. |
@@ -153,6 +156,8 @@ Make `~/eyesim/rig.json`:
 | `dist_cm` | Front of the camera lens to the front of your eye (cornea) | 25–100 cm |
 
 If anything is outside the allowed range, the network wasn't trained on it.
+The older network (31.5–42.5 cm, 8–12 mm, 2.0–3.6 mm only) is kept in
+`checkpoints/old_31-42cm/`.
 For the IMX708 use **30–37 cm**: farther away the pupil gets too few pixels.
 The HQ camera with the 16 mm lens can go to 60 cm or more.
 
@@ -308,16 +313,30 @@ success.
 
 ### Retraining the network (optional)
 
-The network in `checkpoints/best.pt` is trained on simulated photos covering
+Retraining with the current simulator gives a network that covers
 distances of 25–100 cm, LED offsets of 6–20 mm and lens openings of
-1.5–4.5 mm. That covers both cameras. To retrain (about an hour to make the
-data and 1.5 hours to train):
+1.5–4.5 mm, which covers both cameras. Needs about 8 GB of free disk. To retrain (about 10 hours to make the
+300k photos and 1 hour to train on an M-series MacBook Air):
 
 ```bash
 /opt/anaconda3/bin/python scripts/generate_dataset.py          # -> data/train_set
 /opt/anaconda3/bin/python scripts/train.py                     # -> checkpoints/
 /opt/anaconda3/bin/python scripts/report.py                    # -> checkpoints/report.png
 /opt/anaconda3/bin/python -m pytest -q                         # physics checks
+```
+
+**Quick wider-range update (about 45 minutes).** Instead of starting from
+scratch, render a smaller set covering eye + lens from −12 to +6 D (850 nm),
+skip most blind-band photos, and fine-tune the current network. `--m-only`
+trains for the spherical equivalent only (sphere + half the cylinder):
+astigmatism stays in the photos, so the network learns to ignore it, but it
+isn't reported. Training now also blurs, smears and dims one LED at random,
+because real photos are softer than the simulator's.
+
+```bash
+/opt/anaconda3/bin/python scripts/generate_dataset.py --n 100000 --m-min -12 --m-max 6 --dark-keep 0.3 --out data/train_set_wide
+/opt/anaconda3/bin/python scripts/train.py --data data/train_set_wide --init checkpoints/best.pt --m-only --epochs 12 --lr 7e-4 --out checkpoints/wide_m_only
+/opt/anaconda3/bin/python scripts/measure_eye.py data/eyes/*left* --checkpoint checkpoints/wide_m_only/best.pt
 ```
 
 To see the expected photos for your exact rig:
