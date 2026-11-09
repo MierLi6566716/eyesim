@@ -62,6 +62,52 @@ def load_net(path):
     return model, ck.get("dataset_config", {})
 
 
+def auto_centre(session, save=None):
+    """Pupil centre without clicking: seed on the corneal glint (sharpest
+    unsaturated spot), then fit a circle to the dark disc around it."""
+    from scipy.ndimage import binary_dilation, gaussian_filter
+    meta = json.loads((session / "meta.json").read_text())
+    white = meta.get("white_level", 1.0)
+    acc, sat = 0, None
+    for k in range(meta["shots"]):
+        dark = me.load_frame(me.frame_path(session, k, "dark"), white, False, False)
+        for ch in ("H", "V"):
+            raw = me.load_frame(me.frame_path(session, k, ch), white, False, False)
+            sat = (raw >= 0.98) if sat is None else (sat | (raw >= 0.98))
+            acc = acc + np.clip(raw - dark, 0, None)
+    img = acc / (2 * meta["shots"])
+    ppm = (meta.get("px_per_mm") or 4.75) * meta.get("px_per_mm_dist_mm", meta["dist_mm"]) / meta["dist_mm"]
+    dog = gaussian_filter(img, 1.2) - gaussian_filter(img, 5)
+    dog[binary_dilation(sat, iterations=25)] = -np.inf          # trial-lens reflections clip; the glint doesn't
+    gy0, gx0 = np.unravel_index(np.argmax(dog), dog.shape)
+    sm = gaussian_filter(img, 1.0)
+    gy, gx = np.gradient(sm)
+    pts = []
+    for a in np.linspace(0, 2 * np.pi, 72, endpoint=False):
+        rs = np.arange(1.5 * ppm, 9.0 * ppm, 0.5)      # dark-disc radius 1.5 to 9 mm
+        xs = np.clip((gx0 + rs * np.cos(a)).astype(int), 0, img.shape[1] - 1)
+        ys = np.clip((gy0 + rs * np.sin(a)).astype(int), 0, img.shape[0] - 1)
+        g = gx[ys, xs] * np.cos(a) + gy[ys, xs] * np.sin(a)
+        pts.append((xs[np.argmax(g)], ys[np.argmax(g)]))
+    pts = np.array(pts, float)
+    cx, cy, r = me.fit_circle(pts)
+    for _ in range(3):
+        d = np.abs(np.hypot(pts[:, 0] - cx, pts[:, 1] - cy) - r)
+        pts = pts[d < 2.5 * np.median(d) + 0.5]
+        cx, cy, r = me.fit_circle(pts)
+    if save is not None:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(5, 5))
+        h = 2.5 * r
+        ax.imshow(me.show(img), cmap="gray")
+        ax.add_patch(plt.Circle((cx, cy), r, fill=False, color="c", lw=0.8))
+        ax.plot(gx0, gy0, "r+")
+        ax.set_xlim(cx - h, cx + h); ax.set_ylim(cy + h, cy - h)
+        ax.set_title(f"{session.name}\nauto centre ({cx:.0f}, {cy:.0f}), dark disc r {r:.0f} px", fontsize=7)
+        fig.savefig(save, dpi=100); plt.close(fig)
+    return float(cx), float(cy), float(r)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sessions", nargs="+", help="session folders, or block folders that contain sessions")
@@ -70,6 +116,11 @@ def main():
     ap.add_argument("--reuse-clicks", action="store_true",
                     help="sessions without clicks.json borrow the previous session's (model eye not moved)")
     ap.add_argument("--reclick", action="store_true")
+    ap.add_argument("--click", action="store_true",
+                    help="click the pupil yourself (default: found automatically)")
+    ap.add_argument("--pupil", choices=["set", "measured"], default="set",
+                    help="set (default): pupil size = the model eye's 3/5/7 mm setting, centre from the photo. "
+                         "On the XSJ-501 the dark disc you see is ~1.8x the real aperture, so 'measured' is wrong.")
     ap.add_argument("--hflip", action="store_true")
     ap.add_argument("--vflip", action="store_true")
     ap.add_argument("--brightness", choices=["glint", "none"], default="glint")
@@ -101,6 +152,12 @@ def report(paths, out, args):
         raise SystemExit("no model-eye sessions (meta.json needs true_rx: take them with --eye model --true-rx X)")
     out.mkdir(parents=True, exist_ok=True)
 
+    first = sessions[0]
+    if not args.click and (reclick or not (first / "clicks.json").exists()):
+        cx, cy, r = auto_centre(first, save=out / "pupil_fit.png")
+        (first / "clicks.json").write_text(json.dumps({"pupil_xy_r": [cx, cy, r], "auto": True}, indent=2))
+        print(f"{first.name}: pupil centre found automatically ({cx:.1f}, {cy:.1f}); see {out / 'pupil_fit.png'}")
+        reclick = False
     if args.reuse_clicks:
         last = None
         for s in sessions:
@@ -109,6 +166,17 @@ def report(paths, out, args):
             elif last is not None:
                 shutil.copy(last, s / "clicks.json")
                 print(f"{s.name}: using the clicks from {last.parent.name}")
+
+    if args.pupil == "set":
+        for s in sessions:
+            m = json.loads((s / "meta.json").read_text())
+            f = s / "clicks.json"
+            if m.get("pupil_mm") and m.get("px_per_mm") and f.exists():
+                c = json.loads(f.read_text())
+                ppm = m["px_per_mm"] * m.get("px_per_mm_dist_mm", m["dist_mm"]) / m["dist_mm"]
+                c.setdefault("r_seen_px", c["pupil_xy_r"][2])
+                c["pupil_xy_r"][2] = m["pupil_mm"] / 2 * ppm
+                f.write_text(json.dumps(c, indent=2))
 
     margs = SimpleNamespace(hflip=args.hflip, vflip=args.vflip, brightness=args.brightness, reclick=reclick,
                             focal_mm=4.74, pixel_um=1.4)
@@ -128,7 +196,9 @@ def report(paths, out, args):
                 "dist_cm": r["d"] / 10, "pupil_set_mm": m.get("pupil_mm"), "pupil_measured_mm": round(2 * r["pupil_r"], 2),
                 "side_H": round(float(r["side"][0]), 3), "side_V": round(float(r["side"][1]), 3),
                 "dark_zone": bool(r["dark"]),           # the network's own reading lands in the blind band
-                "crescent_seen": bool(max(abs(r["side"][0]), abs(r["side"][1])) >= me.SIDE_MIN),
+                # Crescent only if H and V agree on the side and both clear the threshold.
+                "crescent_seen": bool(np.sign(r["side"][0]) == np.sign(r["side"][1])
+                                      and min(abs(r["side"][0]), abs(r["side"][1])) >= me.SIDE_MIN),
                 # Everything in IR so no human colour correction is assumed for a plastic eye.
                 "net_system_ir": round(float(r["sys_ir"][0]), 3), "net_eye_ir": round(float(r["eye_ir"][0]), 3),
             })

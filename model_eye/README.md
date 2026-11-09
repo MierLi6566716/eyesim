@@ -308,10 +308,12 @@ rsync -a --partial rpi:~/eyesim/model_eye/crops/ model_eye/sessions/
 /opt/anaconda3/bin/python scripts/model_eye_report.py model_eye/sessions/A_37cm_plus4_7mm --reuse-clicks --out model_eye/results/A_37cm_plus4_7mm
 open model_eye/results/A_37cm_plus4_7mm/report.png
 ```
-A window opens once. Click the **centre of the pupil**, then **3 points on the
-pupil edge**, spread around it. Then click anywhere to accept. The other
-settings reuse these clicks. Carry on whatever it shows; tell me later
-if the right panel says the pupil is more than 10 % off.
+No clicking: the pupil centre is found automatically (check
+`pupil_fit.png` in the results folder: the red + must sit on the glint in the
+middle of the pupil). The pupil size is taken from the model eye's setting
+(7 or 5 mm), because the dark disc you see on the XSJ-501 is about 1.8x the
+real aperture (block A: 12.7 mm seen for 7 mm set), and using it shifted every
+reading by about 4 D.
 
 ### Block B: 37 cm, **+8.00 lens**, 7 mm
 
@@ -393,8 +395,7 @@ cat model_eye/results/SUMMARY.txt
 open model_eye/results/*/report.png
 ```
 
-One click window opens per block (10 in all): pupil centre, 3 edge points,
-accept. Each block gets `results.csv`, `report.png` and `summary.txt` in
+No clicking (see the block A checkpoint). Each block gets `results.csv`, `report.png` and `summary.txt` in
 `model_eye/results/<block>/`, comparing both networks (`checkpoints/best.pt`
 and `checkpoints/wide_m_only/best.pt`).
 
@@ -406,8 +407,8 @@ and `checkpoints/wide_m_only/best.pt`).
 - **Middle**: real crescent side (dots) vs the simulator (steps). If the dots
   switch sides at a different setting than the steps, the simulated dark band
   is off.
-- **Right**: measured vs real pupil (7 or 5 mm). More than 10 % off = the
-  pixel size (ruler photo) is wrong.
+- **Right**: pupil size used. It is the model eye's setting, so it always sits
+  on the line; `--pupil measured --click` measures it from the photo instead.
 
 Save the results (the photos stay off GitHub):
 ```bash
