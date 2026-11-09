@@ -20,13 +20,14 @@ cd ~/eyesim
 #      id  folder name                 dist lens pupil shots from to   step
 BLOCKS="
 A      A_37cm_plus4_7mm             37   4    7     20    0    -5   0.25
-B      B_37cm_nolens_7mm            37   0    7     20    4    -5   0.25
-C1     C1_37cm_nolens_5mm           37   0    5     20    4    -5   0.5
-C2     C2_37cm_plus5_5mm            37   5    5     20    0    -5   0.5
-D1     D1_30cm_nolens_7mm           30   0    7     20    4    -5   0.5
-D2     D2_30cm_plus5_7mm            30   5    7     20    0    -5   0.5
-E1     E1_50cm_nolens_7mm           50   0    7     20    4    -5   0.5
-E2     E2_50cm_plus4_7mm            50   4    7     20    0    -5   0.5
+B      B_37cm_plus8_7mm             37   8    7     20    0    -5   0.5
+C      C_37cm_nolens_7mm            37   0    7     20    4    -5   0.25
+D1     D1_37cm_nolens_5mm           37   0    5     20    4    -5   0.5
+D2     D2_37cm_plus5_5mm            37   5    5     20    0    -5   0.5
+E1     E1_30cm_nolens_7mm           30   0    7     20    4    -5   0.5
+E2     E2_30cm_plus5_7mm            30   5    7     20    0    -5   0.5
+F1     F1_25cm_nolens_7mm           25   0    7     20    4    -5   0.5
+F2     F2_25cm_plus6_7mm            25   6    7     20    0    -5   0.5
 R      R_37cm_plus4_7mm_repeat      37   4    7     20    0    -5   0.5
 "
 

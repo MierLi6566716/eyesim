@@ -20,13 +20,14 @@ No working-distance lens pre-added (the software handles the camera distance).
 | Block | Distance measured (cm) | GAIN | EXPOSURE | Done? | Anything odd (bumped table, reflection, skipped settings) |
 |---|---|---|---|---|---|
 | A  37 cm +4 lens 7 mm | | | | | |
-| B  37 cm no lens 7 mm | | | | | |
-| C1 37 cm no lens 5 mm | | | | | |
-| C2 37 cm +5 lens 5 mm | | | | | |
-| D1 30 cm no lens 7 mm | | | | | |
-| D2 30 cm +5 lens 7 mm | | | | | |
-| E1 50 cm no lens 7 mm | | | | | |
-| E2 50 cm +4 lens 7 mm | | | | | |
+| B  37 cm +8 lens 7 mm | | | | | |
+| C  37 cm no lens 7 mm | | | | | |
+| D1 37 cm no lens 5 mm | | | | | |
+| D2 37 cm +5 lens 5 mm | | | | | |
+| E1 30 cm no lens 7 mm | | | | | |
+| E2 30 cm +5 lens 7 mm | | | | | |
+| F1 25 cm no lens 7 mm | | | | | |
+| F2 25 cm +6 lens 7 mm | | | | | |
 | R  37 cm +4 lens, re-placed | | | | | |
 
 ## Anything else

@@ -5,8 +5,11 @@ moves, never blinks and never focuses. If the network reads it correctly, what
 still goes wrong on a real eye is real-eye stuff. If it reads it wrong, the rig
 or the simulator is off, and these photos say which.
 
-Plan: **9 blocks, 160 settings, 20 shots each (about 9,600 photo pairs)**,
-about 2 h of shooting plus 30 min of setup.
+Plan: **10 blocks, 170 settings, 20 shots each (about 10,000 photo pairs)**,
+about 2 h 15 min of shooting plus 30 min of setup. Distances are **37, 30 and
+25 cm** only (nothing farther: a glasses-style device has to work up close).
+Stronger plus lenses make up for being close: they push the model eye + lens
+past the dark band, where the crescent shows.
 
 ---
 
@@ -40,40 +43,55 @@ Mac  ~/Desktop/eyesim/model_eye/
        look/                             pictures copied by look.sh  (not on GitHub)
 ```
 
-The full photos are about 57 GB in total; the Pi has 165 GB free. The crops
-come to about 3 GB; the Mac has 16 GB free.
+The full photos are about 61 GB in total; the Pi has 165 GB free. The crops
+come to about 3.5 GB; the Mac has 16 GB free.
 
 ## 1. The blocks
 
 | Block | Distance | Pupil | Trial lens | Scale settings | Count | Time |
 |---|---|---|---|---|---|---|
 | **A** | 37 cm | 7 mm | **+4.00** | 0 → −5, every 0.25 | 21 | 16 min |
-| **B** | 37 cm | 7 mm | none | +4 → −5, every 0.25 | 37 | 28 min |
-| C1 | 37 cm | **5 mm** | none | +4 → −5, every 0.5 | 19 | 14 min |
-| C2 | 37 cm | **5 mm** | **+5.00** | 0 → −5, every 0.5 | 11 | 8 min |
-| D1 | **30 cm** | 7 mm | none | +4 → −5, every 0.5 | 19 | 14 min |
-| D2 | **30 cm** | 7 mm | **+5.00** | 0 → −5, every 0.5 | 11 | 8 min |
-| E1 | **50 cm** | 7 mm | none | +4 → −5, every 0.5 | 19 | 14 min |
-| E2 | **50 cm** | 7 mm | **+4.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| B | 37 cm | 7 mm | **+8.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| C | 37 cm | 7 mm | none | +4 → −5, every 0.25 | 37 | 28 min |
+| D1 | 37 cm | **5 mm** | none | +4 → −5, every 0.5 | 19 | 14 min |
+| D2 | 37 cm | **5 mm** | **+5.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| E1 | **30 cm** | 7 mm | none | +4 → −5, every 0.5 | 19 | 14 min |
+| E2 | **30 cm** | 7 mm | **+5.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| F1 | **25 cm** | 7 mm | none | +4 → −5, every 0.5 | 19 | 14 min |
+| F2 | **25 cm** | 7 mm | **+6.00** | 0 → −5, every 0.5 | 11 | 8 min |
 | R | 37 cm | 7 mm | +4.00 | 0 → −5, every 0.5 | 11 | 8 min |
 
 - **A is the most important**, so it goes first. Model eye + lens runs −4 to
   −9 D, like your own eye, and that's where the network failed on you.
-- The order needs the fewest changes: the distance moves only after C2.
+- **B** (+8 lens) reaches −8 to −13 D: strong myopia, far past the dark band.
+- The order needs the fewest changes: the distance moves only after D2.
 - **R** repeats A after you take the model eye off the table and put it back.
   That measures how repeatable the whole thing is (a paper needs that number).
-- **Not the 3 mm pupil**: at 37 cm everything from −10.5 to +5 D would be dark.
+- **Not the 3 mm pupil**: at 37 cm it would be dark from about −10 to +5 D.
+- **Not closer than 25 cm** yet: the networks were trained on 25 to 100 cm.
+  20 cm needs a retrain first.
 
-What you should see at 37 cm, 7 mm (eye + lens, from the simulator): **dark**
-between about −6 and +0.5 D. Above +0.5 a crescent on the side **away from
-the LED** (left in the H photo). Below −6 a crescent on the **LED side**
-(right in H).
+The dark band (no crescent) moves and widens as you get closer. Every lens
+block is chosen to cross its edge part-way through the sweep (model eye +
+lens, in IR, from the simulator):
+
+| Distance | 7 mm pupil: dark between | 5 mm pupil: dark between |
+|---|---|---|
+| 37 cm | −4.75 and +1.5 D | −6.75 and +2.5 D |
+| 30 cm | −6.5 and +2.0 D | −8.75 and +3.0 D |
+| 25 cm | −8.0 and +2.25 D | −10.75 and +3.75 D |
+
+Above the band: a crescent on the side **away from the LED** (left in the H
+photo). Below it: a crescent on the **LED side** (right in H).
+
+**Lenses you need:** +4.00, +5.00, +6.00, +8.00. Missing one? Tell me which
+powers you have and I'll change the block.
 
 ---
 
 ## 2. Things to have on the table
 
-- The XSJ-501, its +4.00 and +5.00 trial lenses
+- The XSJ-501 and the **+4.00, +5.00, +6.00 and +8.00** trial lenses
 - A tape measure, a **mm ruler**, masking tape and a pen
 - A few books or a box to raise the model eye to the camera's height
 - Your phone (its flashlight is fine for reading the scale)
@@ -122,7 +140,7 @@ ssh -t rpi "sudo date -s '$(date '+%Y-%m-%d %H:%M:%S')'"
 2. Lay a long strip of masking tape on the table, straight out from the
    camera lens.
 3. With the tape measure starting at the **front glass of the camera lens**,
-   mark the strip at **30.0**, **37.0** and **50.0 cm**.
+   mark the strip at **25.0**, **30.0** and **37.0 cm**.
 
 ### Step 3 (table): place the model eye at 37 cm
 
@@ -219,7 +237,8 @@ pointing at the camera (Step 3.6).
 
 Measure the **trial-lens distance** too: with a lens in the groove closest to
 the barrel, measure in mm from the lens to the model eye's front glass (about
-5 to 15 mm). Then save the settings **[PI]**:
+5 to 15 mm). Measure it to the nearest mm: with the +8 lens, 1 mm off moves
+the answer by about 0.07 D. Then save the settings **[PI]**:
 ```bash
 echo "GAIN=4 EXPOSURE=20000 VERTEX=10" > camera.env     # your gain, exposure and lens distance
 cat camera.env
@@ -294,26 +313,34 @@ pupil edge**, spread around it. Then click anywhere to accept. The other
 settings reuse these clicks. Carry on whatever it shows; tell me later
 if the right panel says the pupil is more than 10 % off.
 
-### Block B: 37 cm, no lens, 7 mm
+### Block B: 37 cm, **+8.00 lens**, 7 mm
 
-Take the lens **out**.
+Swap the +4.00 for the **+8.00** in the same groove (closest to the barrel,
+handle down). Do the reflection check again after the first setting.
 ```bash
 ./sweep.sh B
 ```
 
-### Blocks C1, C2: 37 cm, **5 mm pupil**
+### Block C: 37 cm, no lens, 7 mm
+
+Take the lens **out**.
+```bash
+./sweep.sh C
+```
+
+### Blocks D1, D2: 37 cm, **5 mm pupil**
 
 Flip the pupil handle to **5 mm**. Nothing else moves.
 ```bash
-./sweep.sh C1
+./sweep.sh D1
 ```
 Put the **+5.00** lens in the groove closest to the barrel:
 ```bash
-./sweep.sh C2
+./sweep.sh D2
 ```
 Take the lens out, flip the pupil back to **7 mm**.
 
-### Blocks D1, D2: **30 cm**
+### Blocks E1, E2: **30 cm**
 
 1. Un-tape the model eye, slide it straight toward the camera until its front
    glass is over the **30.0 cm** mark. Same height, still pointing at the lens.
@@ -324,18 +351,18 @@ Take the lens out, flip the pupil back to **7 mm**.
    `camera.env` (keep VERTEX).
 
 ```bash
-./sweep.sh D1                 # no lens
-./sweep.sh D2                 # +5.00 lens in the groove closest to the barrel
+./sweep.sh E1                 # no lens
+./sweep.sh E2                 # +5.00 lens in the groove closest to the barrel
 ```
 
-### Blocks E1, E2: **50 cm**
+### Blocks F1, F2: **25 cm**
 
-Same as for D, at the **50.0 cm** mark, with `--dist 50` in `--aim` and
-`--check`. It's further, so it's dimmer: if it says `dim`, raise the gain.
+Same as for E, at the **25.0 cm** mark, with `--dist 25` in `--aim` and
+`--check`. Brighter again, so lower the gain if it says CLIPPED.
 
 ```bash
-./sweep.sh E1                 # no lens
-./sweep.sh E2                 # +4.00 lens in the groove closest to the barrel
+./sweep.sh F1                 # no lens
+./sweep.sh F2                 # +6.00 lens in the groove closest to the barrel
 ```
 
 ### Block R: repeat at 37 cm
@@ -351,8 +378,7 @@ Same as for D, at the **50.0 cm** mark, with `--dist 50` in `--aim` and
 ./sweep.sh R
 ```
 
-**Extra time?** Run `./sweep.sh B` again with the scale stepped by hand at
-settings you care about. Or ask me for a block with 40 shots; more shots of the
+**Extra time?** Ask me for a block with 40 shots; more shots of the
 same setting are what we'd fine-tune on later.
 
 ---
@@ -367,7 +393,7 @@ cat model_eye/results/SUMMARY.txt
 open model_eye/results/*/report.png
 ```
 
-One click window opens per block (9 in all): pupil centre, 3 edge points,
+One click window opens per block (10 in all): pupil centre, 3 edge points,
 accept. Each block gets `results.csv`, `report.png` and `summary.txt` in
 `model_eye/results/<block>/`, comparing both networks (`checkpoints/best.pt`
 and `checkpoints/wide_m_only/best.pt`).
