@@ -237,7 +237,9 @@ def main():
             print("camera %s, %d-bit. Wrote %s/%s_*.png (look at these) and %s_*.npy (for the Mac)"
                   % (cam.model, cam.bits, CAL.name, tag, tag))
             if args.check:
-                room = float(np.percentile(got["dark"], 99.9)) / cam.white
+                # The sensor reads ~64 (10-bit) per pixel with no light at all; 4 pixels are summed.
+                black = 4 * 64 * 2 ** (cam.bits - 10)
+                room = max(0.0, float(np.percentile(got["dark"], 99.9)) - black) / cam.white
                 print("room light (dark frame): %.1f%% of full  %s" % (
                     100 * room, "OK" if room < 0.05 else "TOO BRIGHT: lights off, curtains shut, no lamps"))
                 lift = float(np.percentile(got["H"], 99.99)) - float(np.percentile(got["dark"], 99.99))
