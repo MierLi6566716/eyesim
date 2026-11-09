@@ -107,7 +107,7 @@ Test with the camera plugged in (step 2 first):
 python3 eye_capture.py --check
 ```
 
-Then open `check_H.png` and point the LED at the camera. A bright spot means
+Then open `calibration/check_H.png` and point the LED at the camera. A bright spot means
 it sees infrared. If the H frame is no brighter than the dark one, the script
 says so.
 
@@ -122,7 +122,7 @@ mkdir -p ~/eyesim
 From the Mac, copy the script over:
 
 ```bash
-scp hardware/eye_capture.py pi@<pi-address>:~/eyesim/
+scp hardware/eye_capture.py rpi:~/eyesim/      # rpi = the Pi, set in ~/.ssh/config
 ```
 
 The Arduino keeps the sketch you already have: it takes `H1`, `H0`, `V1`,
@@ -176,7 +176,7 @@ Hold a mm ruler exactly where your eye will be, then:
 python3 eye_capture.py --scale
 ```
 
-Copy `scale_H.npy` to the Mac (Mac step 2 turns it into a number for `rig.json`).
+Copy `calibration/scale_H.npy` to the Mac (Mac step 2 turns it into a number for `rig.json`).
 
 ### Pi step 7: brightness check with your eye
 
@@ -186,7 +186,7 @@ Sit at `dist_cm`, then:
 python3 eye_capture.py --check
 ```
 
-Open `check_H.png`. Your eye should be sharp and in the middle, and you
+Open `calibration/check_H.png`. Your eye should be sharp and in the middle, and you
 should see a small bright dot on the cornea (the glint). In the printout, the
 H line should **not** show a lot of clipping. If the pupil is pitch black
 everywhere, raise `--gain` (up to 16) or `--exposure-us` (up to 30000). If
@@ -225,13 +225,13 @@ Rough guide at 37 cm: the crescent appears once the lens is about
 hyperope (+2 or more) already shows a far-side crescent with no lens. For
 astigmatism, add `--cyl` and `--axis` for any cylinder lens you put in.
 
-Each session is a folder like `eyes/20261102-2310-right-37cm-S+3`.
+Each session is a folder like `own_eye/20261102-2310-right-37cm-S+3`.
 
 ### Pi step 9: copy to the Mac
 
 ```bash
-scp -r pi@<pi-address>:~/eyesim/eyes ~/Desktop/eyesim/data/
-scp pi@<pi-address>:~/eyesim/scale_H.npy ~/Desktop/eyesim/data/
+mkdir -p ~/Desktop/eyesim/data/eyes && scp -r rpi:~/eyesim/own_eye/* ~/Desktop/eyesim/data/eyes/
+scp rpi:~/eyesim/calibration/scale_H.npy ~/Desktop/eyesim/data/
 ```
 
 ---

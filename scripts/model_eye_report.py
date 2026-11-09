@@ -24,8 +24,12 @@ How to read it:
 The model eye has no focusing and cannot drift, so pupil clicks can be reused
 across sessions taken without moving it (--reuse-clicks).
 
-  python scripts/model_eye_report.py model_eye/sessions/* --reuse-clicks
-  python scripts/model_eye_report.py model_eye/sessions/*37cm* --out model_eye/results/37cm
+  python scripts/model_eye_report.py model_eye/sessions/*/ --reuse-clicks
+        every block folder -> model_eye/results/<block>/, plus model_eye/results/SUMMARY.txt
+  python scripts/model_eye_report.py model_eye/sessions/A_37cm_plus4_7mm --reuse-clicks
+        one block
+  python scripts/model_eye_report.py model_eye/sessions/A_*/*-true-2* --out model_eye/results/test
+        any sessions you list, into one report
 """
 
 import argparse
@@ -60,7 +64,7 @@ def load_net(path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("sessions", nargs="+")
+    ap.add_argument("sessions", nargs="+", help="session folders, or block folders that contain sessions")
     ap.add_argument("--checkpoints", nargs="+", default=DEFAULT_NETS)
     ap.add_argument("--out", default="model_eye/results")
     ap.add_argument("--reuse-clicks", action="store_true",
@@ -71,30 +75,53 @@ def main():
     ap.add_argument("--brightness", choices=["glint", "none"], default="glint")
     args = ap.parse_args()
 
-    sessions = [Path(s) for s in sorted(args.sessions) if (Path(s) / "meta.json").exists()]
+    out = ROOT / args.out if not Path(args.out).is_absolute() else Path(args.out)
+    paths = [Path(s) for s in sorted(args.sessions)]
+    blocks = [p for p in paths if not (p / "meta.json").exists() and any(p.glob("*/meta.json"))]
+    if not blocks:
+        report(paths, out, args)
+        return
+    summary = []
+    for b in blocks:
+        print(f"\n================ block {b.name}")
+        try:
+            summary.append(f"== {b.name}\n" + report(sorted(b.glob("*/")), out / b.name, args))
+        except SystemExit as e:
+            summary.append(f"== {b.name}\n  skipped: {e}\n")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "SUMMARY.txt").write_text("\n".join(summary))
+    print(f"\nwrote {out / 'SUMMARY.txt'}")
+
+
+def report(paths, out, args):
+    reclick = args.reclick
+    sessions = [s for s in paths if (s / "meta.json").exists()]
     sessions = [s for s in sessions if json.loads((s / "meta.json").read_text()).get("true_rx") is not None]
     if not sessions:
         raise SystemExit("no model-eye sessions (meta.json needs true_rx: take them with --eye model --true-rx X)")
-    out = ROOT / args.out if not Path(args.out).is_absolute() else Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
     if args.reuse_clicks:
         last = None
         for s in sessions:
-            if (s / "clicks.json").exists() and not args.reclick:
+            if (s / "clicks.json").exists() and not reclick:
                 last = s / "clicks.json"
             elif last is not None:
                 shutil.copy(last, s / "clicks.json")
                 print(f"{s.name}: using the clicks from {last.parent.name}")
 
-    margs = SimpleNamespace(hflip=args.hflip, vflip=args.vflip, brightness=args.brightness, reclick=args.reclick,
+    margs = SimpleNamespace(hflip=args.hflip, vflip=args.vflip, brightness=args.brightness, reclick=reclick,
                             focal_mm=4.74, pixel_um=1.4)
     rows = []
     for ck_path in args.checkpoints:
         model, cfg = load_net(ROOT / ck_path if not Path(ck_path).is_absolute() else ck_path)
         print(f"\n######## {ck_path}")
         for s in sessions:
-            r = me.measure(s, model, cfg, margs)
+            try:
+                r = me.measure(s, model, cfg, margs)
+            except Exception as e:                  # e.g. pupil outside the crop: skip, keep going
+                print(f"{s.name}: SKIPPED ({type(e).__name__}: {e})")
+                continue
             m = r["meta"]
             rows.append({
                 "network": ck_path, "session": s.name, "dial_d": m["true_rx"], "lens_d": m.get("lens_d", 0.0),
@@ -105,8 +132,10 @@ def main():
                 # Everything in IR so no human colour correction is assumed for a plastic eye.
                 "net_system_ir": round(float(r["sys_ir"][0]), 3), "net_eye_ir": round(float(r["eye_ir"][0]), 3),
             })
-            args.reclick = False
+            margs.reclick = False
 
+    if not rows:
+        raise SystemExit("every session failed (see SKIPPED above)")
     with open(out / "results.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]))
         w.writeheader()
@@ -181,6 +210,7 @@ def main():
     (out / "summary.txt").write_text(text + "\n")
     print("\n" + text)
     print(f"wrote {out / 'results.csv'}, {out / 'report.png'}, {out / 'summary.txt'}")
+    return text + "\n"
 
 
 if __name__ == "__main__":

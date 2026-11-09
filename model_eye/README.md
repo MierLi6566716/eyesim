@@ -1,199 +1,389 @@
-# Model-eye test (XSJ-501 schematic eye)
+# Model-eye photo day (XSJ-501)
 
-A model eye has a **known** refraction (its barrel scale), never moves, never
-blinks and never focuses. If the network is right on it, what's left on a
-real eye is real-eye stuff (iris, eyelid, movement). If it's wrong here too,
-the rig or the simulator is off, and this test says which.
+A model eye has a **known** refraction (the number on its scale), never
+moves, never blinks and never focuses. If the network reads it correctly, what
+still goes wrong on a real eye is real-eye stuff. If it reads it wrong, the rig
+or the simulator is off, and these photos say which.
 
-What it answers:
-
-1. **Does the network track the scale?** The slope of network vs scale should
-   be about 1. On your own eye it read about −5 whatever the lens, which looks
-   like a slope well below 1.
-2. **Is the simulated blind band right?** The crescent side for each setting
-   is compared with what the simulator predicts.
-3. **Is the pixel scale right?** The pupil size the script measures is
-   compared with the model eye's real pupil (3 / 5 / 7 mm).
-
-## The XSJ-501
-
-| | |
-|---|---|
-| Refraction | Barrel scale **+4 to −5 D**, accurate to 0.25 D. Read it at the "Marker". |
-| Pupils | **3, 5, 7 mm**: flip the sheet-shaped handle under the front of the barrel |
-| Lens grooves | 3 arc grooves in front of the barrel; the axis dial is only for cylinder lenses |
-| Tilt | Axis screw; set the barrel level, pointing straight at the camera |
-
-**Ignore the manual's "pre-add −1.00 D at 1 m / +2.00 D at 0.5 m" step.**
-That is for human retinoscopy at a working distance. Our software already
-corrects for the camera distance. Only put a lens in when a block below says
-so, and always pass it as the lens number.
-
-Pupil choice: **7 mm** for the main blocks, **5 mm** for one extra block.
-**Skip 3 mm**: at 37 cm its blind band covers about −10.5 to +5 D, so every
-setting would be dark.
-
-What to expect at 37 cm, 7 mm (eye + lens, from the simulator):
-dark between about **−6 and +0.5 D**. A crescent on the far side (left in H)
-above that, on the LED side (right in H) below it.
-
-## Folders
-
-| Path | What | On GitHub? |
-|---|---|---|
-| `model_eye/sessions/` | Raw photos, one folder per setting | No (GBs) |
-| `model_eye/results/<block>/` | `results.csv`, `report.png`, `summary.txt` | Yes |
-| `model_eye/sweep.sh` | Pi helper: one session per scale setting | Yes |
-| `model_eye/NOTES.md` | Your notes from the day (distances, gain, anything odd) | Yes |
-
-Session folder names say everything:
-`20261106-101500-model-37cm-S+4-true-2.5-p7mm` = model eye, 37 cm, +4 lens,
-scale −2.5 D, 7 mm pupil.
+Plan: **9 blocks, 160 settings, 20 shots each (about 9,600 photo pairs)**,
+about 2 h of shooting plus 30 min of setup.
 
 ---
 
-## Part 1: on the Mac, copy the new scripts to the Pi
+## 0. What goes where
+
+You use **two terminal windows on the Mac**:
+
+| Window | How to open it | Prompt looks like | Commands marked |
+|---|---|---|---|
+| **PI** | `ssh rpi` then `cd ~/eyesim` | `mierli@eyesim:~/eyesim $` | **[PI]** |
+| **MAC** | `cd ~/Desktop/eyesim` | `... eyesim %` | **[MAC]** |
+
+`rpi` already points to `mierli@172.18.75.155` (in `~/.ssh/config`).
+
+Folders:
+
+```
+Pi   ~/eyesim/
+       eye_capture.py  sweep.sh  crop_sessions.py  pack_sessions.py   the programs
+       rig.json        camera.env                                     your settings
+       calibration/    check_H.png, check_H_box.png, scale_H.npy ...  test photos
+       own_eye/        your own eye sessions from October             (kept)
+       model_eye/raw/A_37cm_plus4_7mm/<one folder per setting>/       full photos, stay on the Pi
+       model_eye/crops/A_37cm_plus4_7mm/<one folder per setting>/     512x512 copies for the Mac
+
+Mac  ~/Desktop/eyesim/model_eye/
+       sessions/A_37cm_plus4_7mm/...     the crops, copied from the Pi   (not on GitHub)
+       results/A_37cm_plus4_7mm/         report.png, summary.txt, results.csv
+       results/SUMMARY.txt               all blocks in one file
+       NOTES.md                          fill in during the day
+       look/                             pictures copied by look.sh  (not on GitHub)
+```
+
+The full photos are about 57 GB in total; the Pi has 165 GB free. The crops
+come to about 3 GB; the Mac has 16 GB free.
+
+## 1. The blocks
+
+| Block | Distance | Pupil | Trial lens | Scale settings | Count | Time |
+|---|---|---|---|---|---|---|
+| **A** | 37 cm | 7 mm | **+4.00** | 0 → −5, every 0.25 | 21 | 16 min |
+| **B** | 37 cm | 7 mm | none | +4 → −5, every 0.25 | 37 | 28 min |
+| C1 | 37 cm | **5 mm** | none | +4 → −5, every 0.5 | 19 | 14 min |
+| C2 | 37 cm | **5 mm** | **+5.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| D1 | **30 cm** | 7 mm | none | +4 → −5, every 0.5 | 19 | 14 min |
+| D2 | **30 cm** | 7 mm | **+5.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| E1 | **50 cm** | 7 mm | none | +4 → −5, every 0.5 | 19 | 14 min |
+| E2 | **50 cm** | 7 mm | **+4.00** | 0 → −5, every 0.5 | 11 | 8 min |
+| R | 37 cm | 7 mm | +4.00 | 0 → −5, every 0.5 | 11 | 8 min |
+
+- **A is the most important**, so it goes first. Model eye + lens runs −4 to
+  −9 D, like your own eye, and that's where the network failed on you.
+- The order needs the fewest changes: the distance moves only after C2.
+- **R** repeats A after you take the model eye off the table and put it back.
+  That measures how repeatable the whole thing is (a paper needs that number).
+- **Not the 3 mm pupil**: at 37 cm everything from −10.5 to +5 D would be dark.
+
+What you should see at 37 cm, 7 mm (eye + lens, from the simulator): **dark**
+between about −6 and +0.5 D. Above +0.5 a crescent on the side **away from
+the LED** (left in the H photo). Below −6 a crescent on the **LED side**
+(right in H).
+
+---
+
+## 2. Things to have on the table
+
+- The XSJ-501, its +4.00 and +5.00 trial lenses
+- A tape measure, a **mm ruler**, masking tape and a pen
+- A few books or a box to raise the model eye to the camera's height
+- Your phone (its flashlight is fine for reading the scale)
+
+## 3. The room
+
+850 nm infrared comes from the **sun**, **ordinary bulbs**, **halogen lamps**
+and **heaters**, not from LED lights or screens.
+
+1. Close the curtains or blinds fully. Shoot in the evening if you can.
+2. Turn off the ceiling light. No ordinary bulbs, halogen lamps or heaters on.
+3. To see the scale: use your phone flashlight or a **white LED** desk lamp
+   pointed at the table, **not at the camera or the model eye**. Leave it
+   exactly as it is for the whole block. Don't switch it on and off between
+   settings.
+4. Don't stand between the camera and the model eye. Don't lean on or bump
+   the table while a setting is being shot (about 30 s each).
+
+`--check` prints a `room light` line: it must say **OK**.
+
+---
+
+## 4. Setup
+
+### Step 1 [MAC]: get the newest code and check the Pi
 
 ```bash
 cd ~/Desktop/eyesim
 git pull
-scp hardware/eye_capture.py scripts/pack_sessions.py model_eye/sweep.sh rpi:~/eyesim/
-ssh rpi 'chmod +x ~/eyesim/sweep.sh; mkdir -p ~/eyesim/model_eye; df -h ~ | tail -1'
+scp hardware/eye_capture.py hardware/crop_sessions.py model_eye/sweep.sh scripts/pack_sessions.py rpi:~/eyesim/
+ssh rpi 'chmod +x ~/eyesim/sweep.sh; df -h ~ | tail -1; ls /dev/ttyACM0'
+```
+The last line must show `/dev/ttyACM0` (the Arduino). The free space must be
+over 60 GB.
+
+Optional, sets the Pi's clock (it's a month behind, which only affects the
+folder names):
+```bash
+ssh -t rpi "sudo date -s '$(date '+%Y-%m-%d %H:%M:%S')'"
 ```
 
-The last number is the Pi's free space. You need about **9 GB**. If it's less,
-pack after each block (Part 3, step 9).
+### Step 2 (table): mark the distances
 
-## Part 2: set up (on the Pi, `ssh rpi`, `cd ~/eyesim`)
+1. Put the camera rig at one end of the table, facing along the table, and
+   **tape it down**.
+2. Lay a long strip of masking tape on the table, straight out from the
+   camera lens.
+3. With the tape measure starting at the **front glass of the camera lens**,
+   mark the strip at **30.0**, **37.0** and **50.0 cm**.
 
-**Step 1. Place it.** Put the XSJ-501 on the table, barrel level and pointing
-straight into the camera. Its **front lens** should be **37.0 cm** from the
-front of the camera lens. Pupil handle on **7 mm**, no lens in the grooves,
-room dark. Write the measured distance in NOTES.md. From now on touch only the
-barrel and the grooves.
+### Step 3 (table): place the model eye at 37 cm
 
-**Step 2. Ruler photo** (pixel scale). Hold a mm ruler flat against the front
-of the barrel, then:
+1. Pupil handle (the flat sheet under the front of the barrel) on **7 mm**.
+   Look into the front to check the hole size.
+2. **No lens** in any groove.
+3. Turn the scale to **0** (at the Marker).
+4. Put the model eye on the strip so its **front lens** (the glass at the very
+   front of the barrel) is exactly over the **37.0 cm** mark. Measure again
+   from the camera lens to that glass, along the line: **37.0 cm**.
+5. **Height**: measure the height of the centre of the camera lens above the
+   table. Raise the model eye with books until the **centre of its barrel** is
+   at the same height (±0.5 cm).
+6. **Pointing**: crouch behind the model eye and sight along the top of the
+   barrel like a rifle. It must point straight at the **camera lens** (not at
+   an LED). The barrel must be level.
+
+### Step 4 [PI]: centre the model eye in the picture
+
 ```bash
-python3 eye_capture.py --scale
+ssh rpi
+cd ~/eyesim
+python3 eye_capture.py --aim --dist 37 --gain 4 --exposure-us 20000
 ```
-On the Mac:
+A live line shows how far the bright spot (the model eye's reflection) is from
+the middle of the picture:
+```
+spot off centre by x  +312 px, y   -40 px ( +63.4 mm,  -8.1 mm)   move the eye ...
+```
+Slide the model eye **sideways** (or the books) until **x** is within ±100.
+Change its **height** until **y** is within ±100. If a number gets bigger,
+move the other way. Keep it on the 37.0 cm mark the whole time. When the line
+says `OK, centred`, press **Ctrl-C**.
+
+If the numbers jump around randomly, or stay stuck near x ±500 / y ±400 (the
+edge of the area it searches), the camera isn't seeing the model eye. Check
+the pointing (Step 3.6) and that the room is dark.
+
+### Step 5 (table): tape it down
+
+Tape the model eye's base (or the books) to the table on two sides. Trace
+around the base with the pen so you can put it back exactly for block R.
+**From now on touch only the scale ring, the pupil handle and the lens
+grooves.** When you turn the scale, hold the base with the other hand.
+
+### Step 6: ruler photo (pixel size) [PI] + [MAC]
+
+Hold the mm ruler flat against the front of the barrel, across the front
+glass, with the marks facing the camera. Keep it still:
 ```bash
-cd ~/Desktop/eyesim
-scp rpi:~/eyesim/scale_H.npy model_eye/scale_H_37cm.npy
+python3 eye_capture.py --scale --dist 37                 # [PI]
+```
+Take the ruler away. Then:
+```bash
+scp rpi:~/eyesim/calibration/scale_H.npy model_eye/scale_H_37cm.npy                          # [MAC]
 /opt/anaconda3/bin/python scripts/measure_eye.py --calibrate-scale model_eye/scale_H_37cm.npy --dist-cm 37
 ```
-Click two ruler marks far apart, then type their distance in mm. Put the two
-printed numbers into `~/eyesim/rig.json` on the Pi (`nano ~/eyesim/rig.json`):
+Click two ruler marks far apart (e.g. 0 and 20 mm), then type their distance in
+mm. It prints two numbers. Put them in `rig.json` on the Pi:
+```bash
+nano rig.json                                            # [PI]
+```
+so it reads (with your numbers in place of 4.92 and 370):
 ```json
 {"ecc_h_mm": 10.0, "ecc_v_mm": 10.0, "aperture_mm": 2.6, "dist_cm": 37,
  "px_per_mm": 4.92, "px_per_mm_dist_mm": 370}
 ```
-(Use your numbers in place of 4.92 / 370.)
+Save: **Ctrl-O**, **Enter**, **Ctrl-X**.
 
-**Step 3. Exposure.** Set the barrel to **+4**:
+### Step 7 [PI]: exposure
+
+Turn the scale to **+4** (strongest crescent, no lens):
 ```bash
-python3 eye_capture.py --check --gain 4 --exposure-us 20000
+python3 eye_capture.py --check --dist 37 --gain 4 --exposure-us 20000
 ```
-Open `check_H.png`. You want a clearly visible crescent that is **not
-clipped** (the printout says if it is). Too dark: raise `--gain` (max 16) or
-`--exposure-us` (max 30000). Clipped: lower them. Then fix the values:
+It prints:
+```
+room light (dark frame): 0.8% of full  OK                <- must be OK (else: Section 3)
+spot off centre by x  +12 px, y   -30 px ...  OK, centred
+exposure: OK                                              <- must be OK
+wrote calibration/check_H_box.png: the 512 px box the Mac will get. ...
+```
+- `CLIPPED`: lower `--gain` (4 → 2 → 1), then `--exposure-us`.
+- `dim`: raise `--gain` (4 → 8 → 16), then `--exposure-us` (max 30000).
+
+Repeat until it says **OK**. Then look at the pictures **[MAC]**:
 ```bash
-export GAIN=4 EXPOSURE=20000      # your numbers; re-type in every new ssh window
+./model_eye/look.sh
+```
+It opens `1_check_H_whole_frame.png` and `2_check_H_box_for_mac.png`. In the
+box picture the **round pupil must be clearly inside** with a bright crescent
+in it, and it should be round, not oval. If it's oval, the barrel isn't
+pointing at the camera (Step 3.6).
+
+Measure the **trial-lens distance** too: with a lens in the groove closest to
+the barrel, measure in mm from the lens to the model eye's front glass (about
+5 to 15 mm). Then save the settings **[PI]**:
+```bash
+echo "GAIN=4 EXPOSURE=20000 VERTEX=10" > camera.env     # your gain, exposure and lens distance
+cat camera.env
 ```
 
-**Step 4. Sign check** (`python3 eye_capture.py --check --gain $GAIN --exposure-us $EXPOSURE`):
+### Step 8 [PI]: sign check (2 minutes, important)
 
-| Barrel | Lens in groove | Expected in `check_H.png` |
+Run `python3 eye_capture.py --check --dist 37` with your gain and exposure
+each time, then `./model_eye/look.sh` on the Mac:
+
+| Scale | Lens | Crescent in `1_check_H_whole_frame.png` should be |
 |---|---|---|
-| +4 | none | crescent on the **left** (away from the LED) |
-| −3 | none | **dark** pupil |
-| −5 | **+4** | crescent on the **right** (LED side) |
+| +4 | none | on the **left** of the pupil (away from the LED) |
+| −3 | none | **none**: the pupil is dark |
+| −5 | +4.00 in the groove nearest the barrel | on the **right** (LED side) |
 
-If it's the other way round, write it in NOTES.md and tell me before going on.
-Take the +4 lens out again.
+If it's the other way round, write it in NOTES.md and **tell me before going
+on**. Take the lens out again.
 
-## Part 3: take the photos (on the Pi)
+Write in `model_eye/NOTES.md`: distance, pixel numbers, gain, exposure,
+VERTEX, sign check.
 
-Each line runs a whole block. It tells you which setting to turn the barrel
-to, waits for Enter, then shoots. `s` + Enter skips one, `q` + Enter stops.
+---
 
-Arguments: `distance  lens  pupil  shots  scale_from  scale_to  step`.
+## 5. Shooting [PI]
 
-**Step 5. Block A: 37 cm, no lens, 7 mm.** 19 sessions, about 12 min.
-Hyperopic side: crescents from about +0.5 up, dark below.
-```bash
-./sweep.sh 37 0 7 10 4 -5 0.5
+Every block is one command. It prints the setup, waits for Enter, then for
+each setting:
+
+```
+>>> Turn the scale to -2.25 at the Marker, hands off, Enter (s = skip, q = stop):
 ```
 
-**Step 6. Block B: 37 cm, +4 lens, 7 mm.** The most important block: eye +
-lens runs from −4 to −9, like your own eye. 11 sessions. Put the **+4.00**
-lens in the groove **closest to the barrel**. Look at the first session's
-`preview_H.png`: if a bright lens reflection sits near the pupil, rotate the
-lens a little in its groove and redo that setting.
+1. Hold the base with one hand. Turn the scale ring with the other until the
+   number sits **exactly** on the Marker line. Look at it straight on, not from
+   the side.
+2. Take both hands off. Wait 2 s. Press **Enter**.
+3. Don't touch the table for the about 30 s it takes (20 shots). The H-frame
+   brightness is printed at the end of each one.
+
+At the end of a block it makes the crops by itself and prints the free space.
+
+- **Stopped half way** (`q`, a typo, Wi-Fi drop)? Run the same block again:
+  settings already done are skipped. To start further down: `./sweep.sh A -2.5`.
+- **Retake one setting?** Delete its folder (`rm -r model_eye/raw/A_37cm_plus4_7mm/*true-2.25-*`)
+  and run the block again.
+- **The ssh window dropped mid-shot?** Run the block again: that setting is
+  done if its folder has a `meta.json`; if not, delete the folder first.
+- `./sweep.sh list` shows all blocks.
+
+### Block A: 37 cm, +4.00 lens, 7 mm (most important)
+
+Put the **+4.00** lens in the groove **closest to the barrel**. Hold it by the
+rim and don't touch the glass. Turn it so its handle points straight down.
 ```bash
-./sweep.sh 37 4 7 10 0 -5 0.5
+./sweep.sh A
+```
+After the first setting, run `./model_eye/look.sh` **[MAC]**. If a bright
+lens reflection sits on or next to the pupil in `4_newest_cropped_session.png`:
+tilt the lens slightly in its groove, delete that setting and run `./sweep.sh A`
+again.
+
+**Checkpoint after block A [MAC]** (5 minutes, catches problems before the
+other 2 hours):
+```bash
+rsync -a --partial rpi:~/eyesim/model_eye/crops/ model_eye/sessions/
+/opt/anaconda3/bin/python scripts/model_eye_report.py model_eye/sessions/A_37cm_plus4_7mm --reuse-clicks --out model_eye/results/A_37cm_plus4_7mm
+open model_eye/results/A_37cm_plus4_7mm/report.png
+```
+A window opens once. Click the **centre of the pupil**, then **3 points on the
+pupil edge**, spread around it. Then click anywhere to accept. The other
+settings reuse these clicks. Carry on whatever it shows; tell me later
+if the right panel says the pupil is more than 10 % off.
+
+### Block B: 37 cm, no lens, 7 mm
+
+Take the lens **out**.
+```bash
+./sweep.sh B
 ```
 
-**Step 7. Block C: 30 cm, closer.** Slide the model eye to **30.0 cm**. The
-pixel scale adjusts for distance by itself.
+### Blocks C1, C2: 37 cm, **5 mm pupil**
+
+Flip the pupil handle to **5 mm**. Nothing else moves.
 ```bash
-./sweep.sh 30 0 7 5 4 -5 1        # lens out: 10 sessions
-./sweep.sh 30 5 7 5 0 -5 1        # +5.00 lens in: 6 sessions
+./sweep.sh C1
+```
+Put the **+5.00** lens in the groove closest to the barrel:
+```bash
+./sweep.sh C2
+```
+Take the lens out, flip the pupil back to **7 mm**.
+
+### Blocks D1, D2: **30 cm**
+
+1. Un-tape the model eye, slide it straight toward the camera until its front
+   glass is over the **30.0 cm** mark. Same height, still pointing at the lens.
+2. `python3 eye_capture.py --aim --dist 30` (with your gain/exposure): centre
+   it again, Ctrl-C. Tape it down.
+3. Scale on **+4**, `python3 eye_capture.py --check --dist 30 --gain ... --exposure-us ...`.
+   It's closer, so it's brighter. If it says CLIPPED, lower the gain and update
+   `camera.env` (keep VERTEX).
+
+```bash
+./sweep.sh D1                 # no lens
+./sweep.sh D2                 # +5.00 lens in the groove closest to the barrel
 ```
 
-**Step 8. Block D: 37 cm, 5 mm pupil.** Back to **37.0 cm**, pupil handle on
-**5 mm**.
+### Blocks E1, E2: **50 cm**
+
+Same as for D, at the **50.0 cm** mark, with `--dist 50` in `--aim` and
+`--check`. It's further, so it's dimmer: if it says `dim`, raise the gain.
+
 ```bash
-./sweep.sh 37 0 5 5 4 -5 1        # lens out: 10 sessions
-./sweep.sh 37 5 5 5 0 -5 1        # +5.00 lens in: 6 sessions
+./sweep.sh E1                 # no lens
+./sweep.sh E2                 # +4.00 lens in the groove closest to the barrel
 ```
 
-**Step 9. Pack on the Pi** (lossless, about 2.5x smaller and faster to copy):
+### Block R: repeat at 37 cm
+
+1. Take the model eye **completely off the table**, then put it back on your
+   pen outline at **37.0 cm**: books, height, pointing (Steps 3 to 5) from
+   scratch.
+2. `python3 eye_capture.py --aim --dist 37`, then `--check`. Set `camera.env`
+   back to the 37 cm gain and exposure.
+3. +4.00 lens in the groove closest to the barrel, pupil 7 mm.
+
 ```bash
-python3 pack_sessions.py model_eye/*/
+./sweep.sh R
 ```
 
-If there's time left: repeat **block B with 20 shots**
-(`./sweep.sh 37 4 7 20 0 -5 0.5`). More photos of the same setting are what
-we'd fine-tune on later.
+**Extra time?** Run `./sweep.sh B` again with the scale stepped by hand at
+settings you care about. Or ask me for a block with 40 shots; more shots of the
+same setting are what we'd fine-tune on later.
 
-## Part 4: on the Mac, copy and analyse
+---
 
-**Step 10. Copy** (re-run if the Wi-Fi drops; `rsync` resumes):
+## 6. Copy, analyse, save [MAC]
+
 ```bash
 cd ~/Desktop/eyesim
-rsync -av --partial rpi:~/eyesim/model_eye/ model_eye/sessions/
-/opt/anaconda3/bin/python scripts/pack_sessions.py model_eye/sessions/*/
-df -h . | tail -1
+rsync -a --partial rpi:~/eyesim/model_eye/crops/ model_eye/sessions/      # re-run if it drops; it resumes
+/opt/anaconda3/bin/python scripts/model_eye_report.py model_eye/sessions/*/ --reuse-clicks
+cat model_eye/results/SUMMARY.txt
+open model_eye/results/*/report.png
 ```
 
-**Step 11. Run the report, one block at a time.** For the first session of
-each block a window opens: click the pupil centre, then 3 points on its edge,
-then click to accept. The other sessions reuse those clicks.
-```bash
-PY=/opt/anaconda3/bin/python
-$PY scripts/model_eye_report.py model_eye/sessions/*-model-37cm-S+0-*-p7mm --reuse-clicks --out model_eye/results/A_37cm_nolens_7mm
-$PY scripts/model_eye_report.py model_eye/sessions/*-model-37cm-S+4-*-p7mm --reuse-clicks --out model_eye/results/B_37cm_plus4_7mm
-$PY scripts/model_eye_report.py model_eye/sessions/*-model-30cm-S+0-*-p7mm --reuse-clicks --out model_eye/results/C_30cm_nolens_7mm
-$PY scripts/model_eye_report.py model_eye/sessions/*-model-30cm-S+5-*-p7mm --reuse-clicks --out model_eye/results/C_30cm_plus5_7mm
-$PY scripts/model_eye_report.py model_eye/sessions/*-model-37cm-S+0-*-p5mm --reuse-clicks --out model_eye/results/D_37cm_nolens_5mm
-$PY scripts/model_eye_report.py model_eye/sessions/*-model-37cm-S+5-*-p5mm --reuse-clicks --out model_eye/results/D_37cm_plus5_5mm
-```
-Each writes `results.csv`, `report.png` and `summary.txt` into its folder and
-compares both networks (`checkpoints/best.pt` and `checkpoints/wide_m_only/best.pt`).
+One click window opens per block (9 in all): pupil centre, 3 edge points,
+accept. Each block gets `results.csv`, `report.png` and `summary.txt` in
+`model_eye/results/<block>/`, comparing both networks (`checkpoints/best.pt`
+and `checkpoints/wide_m_only/best.pt`).
 
-**Step 12. Look at `model_eye/results/B_37cm_plus4_7mm/report.png` first:**
-- Left: dots along a line parallel to the dashed one means it works. A
-  constant offset is fine: a plastic model eye's colour error at 850 nm isn't
-  a human eye's. A flat line means the same squashing as on your eye.
-- Middle: real crescent sides (dots) against the simulator (steps). If the
-  dots switch sides at a different setting than the steps, the simulated
-  blind band is off.
-- Right: measured vs real pupil (7 or 5 mm). More than 10 % off means the
-  pixel scale is wrong. That was suspect #1 for your eye.
+**How to read `report.png`:**
+- **Left**: network vs scale. Dots along a line **parallel** to the dashed
+  one = it works. A constant shift is fine: a plastic eye's colour error at
+  850 nm isn't a human eye's. A **flat** line = the same squashing as on your
+  eye.
+- **Middle**: real crescent side (dots) vs the simulator (steps). If the dots
+  switch sides at a different setting than the steps, the simulated dark band
+  is off.
+- **Right**: measured vs real pupil (7 or 5 mm). More than 10 % off = the
+  pixel size (ruler photo) is wrong.
 
-**Step 13. Save to GitHub:**
+Save the results (the photos stay off GitHub):
 ```bash
 git add model_eye/results model_eye/NOTES.md
 git commit -m "Model-eye results"
@@ -201,9 +391,5 @@ git push
 ```
 Then tell me the results are in.
 
-## Storage
-
-| Block | Sessions | Raw on Pi | Packed |
-|---|---|---|---|
-| A, B (10 shots) | 30 | 5.3 GB | 2.1 GB |
-| C, D (5 shots) | 32 | 2.8 GB | 1.1 GB |
+The full photos stay on the Pi in `~/eyesim/model_eye/raw/`. Don't delete
+them: they're the master copy.

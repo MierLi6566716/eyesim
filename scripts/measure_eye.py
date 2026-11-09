@@ -97,7 +97,7 @@ def get_clicks(session, img, reclick):
     ax.imshow(show(img), cmap="gray")
     ax.set_title(f"{session.name}: click once on the pupil of the eye to measure")
     (x0, y0), = plt.ginput(1, timeout=0)
-    h = max(img.shape) / 25
+    h = max(60, max(img.shape) / 25)          # zoom half-width (crops are only 512 px)
     ax.set_xlim(x0 - h, x0 + h)
     ax.set_ylim(y0 + h, y0 - h)
     ax.set_title("click 3 points spread around the PUPIL edge")

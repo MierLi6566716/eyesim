@@ -13,6 +13,7 @@ reads the sensor's bit depth itself. The camera must see 850 nm, so no IR-cut
 filter (run --check to find out).
 
   python3 eye_capture.py --check              # H, V and dark frame + brightness numbers
+  python3 eye_capture.py --aim                # live: where the bright spot is, to centre the eye
   python3 eye_capture.py --focus              # live sharpness number, for manual-focus lenses
   python3 eye_capture.py --scale              # photo of a ruler at the eye position
   python3 eye_capture.py --eye right --lens 0            # a session with no trial lens
@@ -32,18 +33,19 @@ import time
 from pathlib import Path
 
 import numpy as np
-import serial
 
 # The Arduino shows up as ttyACM0 (Uno R3 / Leonardo) or ttyUSB0 (clones with a CH340).
 SERIAL_PORT = next((p for p in ("/dev/ttyACM0", "/dev/ttyUSB0") if Path(p).exists()), "/dev/ttyUSB0")
 BAUD = 115200
 RIG = Path(__file__).with_name("rig.json")
+CAL = Path(__file__).with_name("calibration")      # check_* and scale_* photos go here
 
 
 class Leds:
     """The Arduino: sends H1/H0/V1/V0 over serial."""
 
     def __init__(self):
+        import serial
         self.ser = serial.Serial(SERIAL_PORT, BAUD, timeout=5)
         time.sleep(2.0)                      # the Arduino resets when the port opens
         self.ser.reset_input_buffer()
@@ -119,6 +121,53 @@ def levels(img, white):
         img.max(), 100.0 * img.max() / white, np.percentile(img, 99.9), 100.0 * (img >= 0.98 * white).mean())
 
 
+SEARCH = (500, 400)     # half-width, half-height of the central area searched for the eye
+
+
+def bright_spot(img, search=SEARCH):
+    """(x, y) of the brightest blob within +-search px of the frame centre
+    (numpy only: 4x4 binned, 3x3 box blur, argmax). The eye is centred with
+    --aim, so bright things near the frame edge are ignored."""
+    H, W = img.shape
+    ox, oy = (max(0, W // 2 - search[0]), max(0, H // 2 - search[1])) if search else (0, 0)
+    img = img[oy:H - oy, ox:W - ox]
+    h, w = (s // 4 * 4 for s in img.shape)
+    b = img[:h, :w].astype(np.float32).reshape(h // 4, 4, w // 4, 4).sum((1, 3))
+    p = np.pad(b, 1, mode="edge")
+    b = sum(p[i:i + b.shape[0], j:j + b.shape[1]] for i in range(3) for j in range(3))
+    j, i = np.unravel_index(np.argmax(b), b.shape)
+    return ox + 4 * i + 2, oy + 4 * j + 2, float(b[j, i]) / 144.0
+
+
+def px_per_mm_at(rig, dist_cm):
+    if rig.get("px_per_mm"):
+        return rig["px_per_mm"] * rig.get("px_per_mm_dist_mm", 10.0 * dist_cm) / (10.0 * dist_cm)
+    return None
+
+
+def where(img, dark, rig, dist_cm):
+    """Text: where the brightest spot is relative to the image centre."""
+    x, y, _ = bright_spot(np.clip(img.astype(np.int32) - dark.astype(np.int32), 0, None))
+    h, w = img.shape
+    dx, dy = x - w // 2, y - h // 2
+    k = px_per_mm_at(rig, dist_cm)
+    mm = " (%+5.1f mm, %+5.1f mm)" % (dx / k, dy / k) if k else ""
+    ok = "OK, centred" if max(abs(dx), abs(dy)) < 100 else "move the eye (aim for both within 100 px)"
+    return "spot off centre by x %+5d px, y %+5d px%s   %s" % (dx, dy, mm, ok)
+
+
+def aim_loop(cam, leds, rig, dist_cm):
+    print("Live position of the brightest spot in the H-LED image (the model eye's\n"
+          "reflection). Slide / raise the model eye until both numbers are near 0\n"
+          "(within 100 px). If a number grows when you move, go the other way. Ctrl-C to stop.")
+    leds.set(None)
+    dark = cam.fresh()
+    leds.set("H")
+    cam.fresh()
+    while True:
+        print("\r" + where(cam.raw(), dark, rig, dist_cm) + "   ", end="", flush=True)
+
+
 def focus_loop(cam):
     from scipy.ndimage import laplace
     print("Hold some small print where your eye will be. Turn the focus ring until the\n"
@@ -146,16 +195,17 @@ def main():
     ap.add_argument("--shots", type=int, default=5)
     ap.add_argument("--exposure-us", type=int, default=20000)
     ap.add_argument("--gain", type=float, default=8.0)
-    ap.add_argument("--out", default="eyes")
+    ap.add_argument("--out", default="own_eye")
     ap.add_argument("--note", default="", help="free text saved in meta.json")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--focus", action="store_true")
+    mode.add_argument("--aim", action="store_true")
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--scale", action="store_true")
     args = ap.parse_args()
 
     rig = json.loads(RIG.read_text()) if RIG.exists() else {}
-    session = not (args.focus or args.check or args.scale)
+    session = not (args.focus or args.check or args.scale or args.aim)
     if session and not {"ecc_h_mm", "ecc_v_mm", "aperture_mm", "dist_cm"} <= rig.keys():
         raise SystemExit("rig.json needs ecc_h_mm, ecc_v_mm, aperture_mm and dist_cm (README, Pi step 4)")
     dist_cm = args.dist or rig.get("dist_cm", 37.0)
@@ -168,22 +218,40 @@ def main():
             leds.set("H")
             focus_loop(cam)
             return
+        if args.aim:
+            aim_loop(cam, leds, rig, dist_cm)
+            return
         if args.check or args.scale:
             tag = "scale" if args.scale else "check"
             got = {}
+            CAL.mkdir(exist_ok=True)
             for ch in (("H", "V", None) if args.check else ("H",)):
                 leds.set(ch)
                 got[ch or "dark"] = img = cam.fresh()
-                np.save("%s_%s.npy" % (tag, ch or "dark"), img)
-                preview(img, "%s_%s.png" % (tag, ch or "dark"))
+                np.save(CAL / ("%s_%s.npy" % (tag, ch or "dark")), img)
+                preview(img, CAL / ("%s_%s.png" % (tag, ch or "dark")))
                 print("%-4s %s" % (ch or "dark", levels(img, cam.white)))
-            print("camera %s, %d-bit. Wrote %s_*.png (look at these) and %s_*.npy (for the Mac)"
-                  % (cam.model, cam.bits, tag, tag))
+            print("camera %s, %d-bit. Wrote %s/%s_*.png (look at these) and %s_*.npy (for the Mac)"
+                  % (cam.model, cam.bits, CAL.name, tag, tag))
             if args.check:
+                room = float(np.percentile(got["dark"], 99.9)) / cam.white
+                print("room light (dark frame): %.1f%% of full  %s" % (
+                    100 * room, "OK" if room < 0.05 else "TOO BRIGHT: lights off, curtains shut, no lamps"))
                 lift = float(np.percentile(got["H"], 99.99)) - float(np.percentile(got["dark"], 99.99))
                 if lift < 0.01 * cam.white:
                     print("\nThe H frame is no brighter than the dark one: the camera is not seeing the\n"
                           "LEDs. Check the wiring, or the camera has an IR-cut filter (README, Pi step 1).")
+                    return
+                print(where(got["H"], got["dark"], rig, dist_cm))
+                x, y, _ = bright_spot(np.clip(got["H"].astype(np.int32) - got["dark"].astype(np.int32), 0, None))
+                hh, ww = got["H"].shape
+                x0, y0 = int(np.clip(x - 256, 0, ww - 512)), int(np.clip(y - 256, 0, hh - 512))
+                preview(got["H"][y0:y0 + 512, x0:x0 + 512], CAL / "check_H_box.png")
+                print("wrote calibration/check_H_box.png: the 512 px box the Mac will get. The pupil must be in it.")
+                hmax = float(got["H"].max()) / cam.white
+                print("exposure: " + ("CLIPPED, lower --gain or --exposure-us" if hmax >= 0.98 else
+                                      "OK" if hmax > 0.2 else
+                                      "dim (peak %.0f%%), raise --gain or --exposure-us" % (100 * hmax)))
             return
 
         if args.eye == "model" and args.true_rx is None:
