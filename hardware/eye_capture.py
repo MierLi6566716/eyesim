@@ -164,8 +164,11 @@ def aim_loop(cam, leds, rig, dist_cm):
     dark = cam.fresh()
     leds.set("H")
     cam.fresh()
-    while True:
-        print("\r" + where(cam.raw(), dark, rig, dist_cm) + "   ", end="", flush=True)
+    try:
+        while True:
+            print("\r" + where(cam.raw(), dark, rig, dist_cm) + "   ", end="", flush=True)
+    except KeyboardInterrupt:
+        print("\nstopped.")
 
 
 def focus_loop(cam):
