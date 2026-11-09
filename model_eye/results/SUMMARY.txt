@@ -12,3 +12,18 @@ checkpoints/wide_m_only/best.pt
   error after removing a constant offset (+0.41 D): mean 0.21 D, within 0.5 D: 93 %
 
 pupil: measured / set = 1.00 (median). OK.
+
+== B_37cm_plus8_7mm
+checkpoints/best.pt
+  sessions with a crescent: 11 of 11
+  fit: network = 0.84 x dial +1.01 D   (ideal slope 1.00)
+  scatter around the fit: 0.40 D
+  error after removing a constant offset (+1.51 D): mean 0.40 D, within 0.5 D: 64 %
+
+checkpoints/wide_m_only/best.pt
+  sessions with a crescent: 11 of 11
+  fit: network = 0.94 x dial +1.00 D   (ideal slope 1.00)
+  scatter around the fit: 0.42 D
+  error after removing a constant offset (+1.05 D): mean 0.35 D, within 0.5 D: 82 %
+
+pupil: measured / set = 1.00 (median). OK.
