@@ -1,8 +1,14 @@
-== D1_37cm_nolens_5mm
+== D2_37cm_plus5_5mm
 checkpoints/best.pt
-  fewer than 3 sessions with a crescent: no fit
+  sessions with a crescent: 7 of 11
+  fit: network = -0.09 x dial +7.34 D   (ideal slope 1.00)
+  scatter around the fit: 0.29 D
+  error after removing a constant offset (+11.12 D): mean 1.00 D, within 0.5 D: 14 %
 
 checkpoints/wide_m_only/best.pt
-  fewer than 3 sessions with a crescent: no fit
+  sessions with a crescent: 7 of 11
+  fit: network = -0.11 x dial +7.38 D   (ideal slope 1.00)
+  scatter around the fit: 0.24 D
+  error after removing a constant offset (+11.15 D): mean 1.02 D, within 0.5 D: 14 %
 
 pupil: measured / set = 1.00 (median). OK.
