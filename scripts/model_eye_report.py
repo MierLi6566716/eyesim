@@ -121,6 +121,63 @@ def auto_centre(session, save=None):
     return float(cx), float(cy), float(r)
 
 
+def reflex_centre(sessions, seed_xy, r_px, save=None):
+    """Pupil centre from the reflex itself. Over a block the crescent moves
+    with the dial while glints, lens reflections and the model eye's dark disc
+    stay put, so (max - median) over the sessions keeps only light that came
+    back through the real aperture. The centre is where a disc of the set
+    pupil radius holds most of that light with little just outside it. On the
+    XSJ-501 the dark disc and glint are not centred on the aperture (5 mm hole
+    up to 15 px off at 37 cm), so this is what the analysis uses by default."""
+    from scipy.ndimage import binary_dilation, gaussian_filter
+    stack, sat = [], None
+    for s in sessions:
+        meta = json.loads((s / "meta.json").read_text())
+        white = meta.get("white_level", 1.0)
+        acc = 0
+        for k in range(0, meta["shots"], 4):
+            dark = me.load_frame(me.frame_path(s, k, "dark"), white, False, False)
+            for ch in ("H", "V"):
+                f = me.load_frame(me.frame_path(s, k, ch), white, False, False)
+                sat = (f >= 0.98) if sat is None else (sat | (f >= 0.98))
+                acc = acc + np.clip(f - dark, 0, None)
+        stack.append(acc)
+    st = np.array(stack)
+    var = gaussian_filter(st.max(0) - np.median(st, 0), 1.0)
+    var[binary_dilation(sat, iterations=6)] = 0
+    yy, xx = np.indices(var.shape)
+    best = (-1.0, seed_xy[0], seed_xy[1])
+    for dy in np.arange(-16, 16.1, 1.0):
+        for dx in np.arange(-16, 16.1, 1.0):
+            cx, cy = seed_xy[0] + dx, seed_xy[1] + dy
+            v = var[np.hypot(xx - cx, yy - cy) <= r_px].sum()
+            if v > best[0]:
+                best = (v, cx, cy)
+    fine = (-np.inf, best[1], best[2])
+    for dy in np.arange(-4, 4.01, 0.5):
+        for dx in np.arange(-4, 4.01, 0.5):
+            cx, cy = best[1] + dx, best[2] + dy
+            d = np.hypot(xx - cx, yy - cy)
+            v = var[d <= r_px].sum() - 3 * var[(d > r_px) & (d <= r_px + 3)].sum()
+            if v > fine[0]:
+                fine = (v, cx, cy)
+    if save is not None:
+        import matplotlib.pyplot as plt
+        h = int(3 * r_px)
+        x0, y0 = int(seed_xy[0]) - h, int(seed_xy[1]) - h
+        fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+        for a, img, t in ((ax[0], st.mean(0), "mean of the block"), (ax[1], var, "moving reflex (max - median)")):
+            w = img[max(y0, 0):y0 + 2 * h, max(x0, 0):x0 + 2 * h]
+            a.imshow(w, cmap="gray", vmax=np.percentile(w, 99.5) + 1e-9)
+            a.add_patch(plt.Circle((seed_xy[0] - max(x0, 0), seed_xy[1] - max(y0, 0)), r_px, fill=False, color="r", lw=0.8))
+            a.add_patch(plt.Circle((fine[1] - max(x0, 0), fine[2] - max(y0, 0)), r_px, fill=False, color="c", lw=0.8))
+            a.set_title(t, fontsize=8)
+        fig.suptitle(f"red: dark-disc centre   cyan: reflex centre ({fine[1] - seed_xy[0]:+.1f}, {fine[2] - seed_xy[1]:+.1f}) px",
+                     fontsize=8)
+        fig.savefig(save, dpi=100); plt.close(fig)
+    return float(fine[1]), float(fine[2])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sessions", nargs="+", help="session folders, or block folders that contain sessions")
@@ -134,6 +191,9 @@ def main():
     ap.add_argument("--pupil", choices=["set", "measured"], default="set",
                     help="set (default): pupil size = the model eye's 3/5/7 mm setting, centre from the photo. "
                          "On the XSJ-501 the dark disc you see is ~1.8x the real aperture, so 'measured' is wrong.")
+    ap.add_argument("--centre", choices=["reflex", "disc"], default="reflex",
+                    help="reflex (default): pupil centre from where the crescents appear over the block; "
+                         "disc: centre of the model eye's dark disc (off for the 5 mm hole)")
     ap.add_argument("--hflip", action="store_true")
     ap.add_argument("--vflip", action="store_true")
     ap.add_argument("--brightness", choices=["glint", "none"], default="glint")
@@ -166,6 +226,18 @@ def report(paths, out, args):
     out.mkdir(parents=True, exist_ok=True)
 
     first = sessions[0]
+    if args.centre == "reflex" and not args.click and len(sessions) >= 4:
+        if reclick or not all((s / "clicks.json").exists() for s in sessions) or \
+                not json.loads((first / "clicks.json").read_text()).get("reflex"):
+            cx, cy, _ = auto_centre(first, save=out / "pupil_fit.png")
+            m0 = json.loads((first / "meta.json").read_text())
+            ppm = m0["px_per_mm"] * m0.get("px_per_mm_dist_mm", m0["dist_mm"]) / m0["dist_mm"]
+            rx, ry = reflex_centre(sessions, (cx, cy), m0["pupil_mm"] / 2 * ppm, save=out / "pupil_reflex.png")
+            print(f"pupil centre from the reflex: ({rx:.1f}, {ry:.1f}), {rx - cx:+.1f} {ry - cy:+.1f} px from the dark disc")
+            for s in sessions:
+                (s / "clicks.json").write_text(json.dumps({"pupil_xy_r": [rx, ry, m0["pupil_mm"] / 2 * ppm],
+                                                           "auto": True, "reflex": True}, indent=2))
+        reclick = False
     if not args.click and (reclick or not (first / "clicks.json").exists()):
         cx, cy, r = auto_centre(first, save=out / "pupil_fit.png")
         (first / "clicks.json").write_text(json.dumps({"pupil_xy_r": [cx, cy, r], "auto": True}, indent=2))
@@ -192,7 +264,7 @@ def report(paths, out, args):
                 f.write_text(json.dumps(c, indent=2))
 
     margs = SimpleNamespace(hflip=args.hflip, vflip=args.vflip, brightness=args.brightness, reclick=reclick,
-                            focal_mm=4.74, pixel_um=1.4)
+                            focal_mm=4.74, pixel_um=1.4, refine=args.centre != "reflex")
     rows = []
     for ck_path in args.checkpoints:
         model, cfg = load_net(ROOT / ck_path if not Path(ck_path).is_absolute() else ck_path)

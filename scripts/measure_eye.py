@@ -277,8 +277,9 @@ def measure(session, model, cfg, args):
             x = int(round(cx + ps[ch][0] - led_off[ch][0] - gx0))
             y = int(round(cy + ps[ch][1] - led_off[ch][1] - gy0))
             wins.append(pair[ch][y - half:y + half, x - half:x + half])
-    dcx, dcy, r_px = refine_pupil(np.mean(wins, 0), r_px)
-    cx, cy = cx + dcx, cy + dcy
+    if getattr(args, "refine", True):     # off when the centre already comes from the reflex itself (model eye)
+        dcx, dcy, r_px = refine_pupil(np.mean(wins, 0), r_px)
+        cx, cy = cx + dcx, cy + dcy
     glint_uv = [((gx0 + o[0] - cx) / r_px, -(gy0 + o[1] - cy) / r_px) for o in led_off]
 
     # Brightness: the glint is a mirror image of the LED, independent of the
