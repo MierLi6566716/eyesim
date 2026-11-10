@@ -62,6 +62,9 @@ def load_net(path):
     return model, ck.get("dataset_config", {})
 
 
+SEED_R = 110   # px from the crop centre where the glint may be
+
+
 def auto_centre(session, save=None):
     """Pupil centre without clicking: seed on the corneal glint (sharpest
     unsaturated spot), then fit a circle to the dark disc around it."""
@@ -79,12 +82,19 @@ def auto_centre(session, save=None):
     ppm = (meta.get("px_per_mm") or 4.75) * meta.get("px_per_mm_dist_mm", meta["dist_mm"]) / meta["dist_mm"]
     dog = gaussian_filter(img, 1.2) - gaussian_filter(img, 5)
     dog[binary_dilation(sat, iterations=25)] = -np.inf          # trial-lens reflections clip; the glint doesn't
+    yy, xx = np.indices(dog.shape)                               # crops are centred on the eye: ignore
+    far = np.hypot(xx - dog.shape[1] / 2, yy - dog.shape[0] / 2) > SEED_R   # screws etc. at the edges
+    dog[far] = -np.inf
     gy0, gx0 = np.unravel_index(np.argmax(dog), dog.shape)
+    if meta.get("pupil_mm"):     # the visible dark disc is about 1.8-2x the set pupil (front lens magnifies)
+        r_range = (1.3 * meta["pupil_mm"] / 2 * ppm, 2.6 * meta["pupil_mm"] / 2 * ppm)
+    else:
+        r_range = (1.5 * ppm, 9.0 * ppm)
     sm = gaussian_filter(img, 1.0)
     gy, gx = np.gradient(sm)
     pts = []
     for a in np.linspace(0, 2 * np.pi, 72, endpoint=False):
-        rs = np.arange(1.5 * ppm, 9.0 * ppm, 0.5)      # dark-disc radius 1.5 to 9 mm
+        rs = np.arange(*r_range, 0.5)
         xs = np.clip((gx0 + rs * np.cos(a)).astype(int), 0, img.shape[1] - 1)
         ys = np.clip((gy0 + rs * np.sin(a)).astype(int), 0, img.shape[0] - 1)
         g = gx[ys, xs] * np.cos(a) + gy[ys, xs] * np.sin(a)
