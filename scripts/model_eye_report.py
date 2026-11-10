@@ -92,19 +92,22 @@ def auto_centre(session, save=None):
         r_range = (1.5 * ppm, 9.0 * ppm)
     sm = gaussian_filter(img, 1.0)
     gy, gx = np.gradient(sm)
-    pts = []
-    for a in np.linspace(0, 2 * np.pi, 72, endpoint=False):
-        rs = np.arange(*r_range, 0.5)
-        xs = np.clip((gx0 + rs * np.cos(a)).astype(int), 0, img.shape[1] - 1)
-        ys = np.clip((gy0 + rs * np.sin(a)).astype(int), 0, img.shape[0] - 1)
-        g = gx[ys, xs] * np.cos(a) + gy[ys, xs] * np.sin(a)
-        pts.append((xs[np.argmax(g)], ys[np.argmax(g)]))
-    pts = np.array(pts, float)
-    cx, cy, r = me.fit_circle(pts)
-    for _ in range(3):
-        d = np.abs(np.hypot(pts[:, 0] - cx, pts[:, 1] - cy) - r)
-        pts = pts[d < 2.5 * np.median(d) + 0.5]
+    cx, cy = float(gx0), float(gy0)
+    for it in range(3):              # the glint is not at the disc centre: re-search from the last fit
+        lo = r_range[0] * (0.5 if it == 0 else 1.0)
+        rs = np.arange(lo, r_range[1], 0.5)
+        pts = []
+        for a in np.linspace(0, 2 * np.pi, 72, endpoint=False):
+            xs = np.clip((cx + rs * np.cos(a)).astype(int), 0, img.shape[1] - 1)
+            ys = np.clip((cy + rs * np.sin(a)).astype(int), 0, img.shape[0] - 1)
+            g = gx[ys, xs] * np.cos(a) + gy[ys, xs] * np.sin(a)
+            pts.append((xs[np.argmax(g)], ys[np.argmax(g)]))
+        pts = np.array(pts, float)
         cx, cy, r = me.fit_circle(pts)
+        for _ in range(3):
+            d = np.abs(np.hypot(pts[:, 0] - cx, pts[:, 1] - cy) - r)
+            pts = pts[d < 2.5 * np.median(d) + 0.5]
+            cx, cy, r = me.fit_circle(pts)
     if save is not None:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(5, 5))

@@ -1,13 +1,13 @@
 checkpoints/best.pt
-  sessions with a crescent: 5 of 11
-  fit: network = 0.80 x dial +1.11 D   (ideal slope 1.00)
-  scatter around the fit: 0.04 D
-  error after removing a constant offset (+1.94 D): mean 0.13 D, within 0.5 D: 100 %
+  sessions with a crescent: 4 of 11
+  fit: network = 1.11 x dial +2.12 D   (ideal slope 1.00)
+  scatter around the fit: 0.01 D
+  error after removing a constant offset (+1.64 D): mean 0.05 D, within 0.5 D: 100 %
 
 checkpoints/wide_m_only/best.pt
-  sessions with a crescent: 5 of 11
-  fit: network = 0.26 x dial -1.57 D   (ideal slope 1.00)
-  scatter around the fit: 0.17 D
-  error after removing a constant offset (+1.53 D): mean 0.47 D, within 0.5 D: 60 %
+  sessions with a crescent: 4 of 11
+  fit: network = 1.26 x dial +2.80 D   (ideal slope 1.00)
+  scatter around the fit: 0.04 D
+  error after removing a constant offset (+1.69 D): mean 0.11 D, within 0.5 D: 100 %
 
 pupil: measured / set = 1.00 (median). OK.

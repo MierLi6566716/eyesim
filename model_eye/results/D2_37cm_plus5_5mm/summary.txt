@@ -1,7 +1,13 @@
 checkpoints/best.pt
-  fewer than 3 sessions with a crescent: no fit
+  sessions with a crescent: 11 of 11
+  fit: network = 0.01 x dial +7.80 D   (ideal slope 1.00)
+  scatter around the fit: 0.30 D
+  error after removing a constant offset (+10.03 D): mean 1.30 D, within 0.5 D: 36 %
 
 checkpoints/wide_m_only/best.pt
-  fewer than 3 sessions with a crescent: no fit
+  sessions with a crescent: 11 of 11
+  fit: network = -0.01 x dial +7.82 D   (ideal slope 1.00)
+  scatter around the fit: 0.22 D
+  error after removing a constant offset (+10.20 D): mean 1.32 D, within 0.5 D: 27 %
 
 pupil: measured / set = 1.00 (median). OK.
