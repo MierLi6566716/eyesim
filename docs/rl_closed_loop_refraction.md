@@ -107,7 +107,22 @@ problem.
 eye (median, within 0.25 D) is unchanged. The error floor with no accommodation is 0.34 D, so the agent closes
 about half the gap between the best rule and that floor.
 
-**What this does not show yet:** that the gain survives a different eye model or a real eye. That is the next test.
+**Robustness test: eyes outside the training ranges.** These eyes react later (0.45–0.6 s), tolerate less fog
+(0.6–1.5 D), have a deeper resting focus (1.25–2.5 D), and more instrument myopia that fades slowly (4–10 s):
+
+| Policy | Average error | Misses > 1 D |
+|---|---|---|
+| Fog-flash twice | 1.87 D | 83 % |
+| RL agent | 1.75 D | 83 % |
+| Null-seeking loop | 2.50 D | 95 % |
+
+The agent is still better (−0.12 D, CI −0.15 to −0.10), but **every policy fails**: under 6 s of fogging cannot
+relax an eye whose instrument myopia fades over 4–10 s. Clinical fogging in children is applied for minutes (+2 D
+for 20 min in [2]).
+
+**The deciding unknown is how fast a real eye relaxes.** The next experiment is to measure that with this device:
+video-rate photorefraction of a real eye while a plus lens fogs it. The current capture is about 1 frame pair per
+1.3 s (full-resolution raw), so this needs a fast cropped video mode first.
 
 ## Open risks
 
