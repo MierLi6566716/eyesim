@@ -1,7 +1,7 @@
-checkpoints/best.pt
+checkpoints/wide_m_only/best.pt
   fewer than 3 sessions with a crescent: no fit
 
-checkpoints/wide_m_only/best.pt
+checkpoints/v3_m_only/best.pt
   fewer than 3 sessions with a crescent: no fit
 
 pupil: measured / set = 1.00 (median). OK.

@@ -1,143 +1,143 @@
 == A_37cm_plus4_7mm
-checkpoints/best.pt
-  sessions with a crescent: 14 of 21
-  fit: network = 1.29 x dial +1.24 D   (ideal slope 1.00)
-  scatter around the fit: 0.10 D
-  error after removing a constant offset (+0.22 D): mean 0.26 D, within 0.5 D: 93 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 14 of 21
   fit: network = 1.01 x dial +0.12 D   (ideal slope 1.00)
   scatter around the fit: 0.24 D
   error after removing a constant offset (+0.11 D): mean 0.20 D, within 0.5 D: 93 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 14 of 21
+  fit: network = 1.00 x dial +0.37 D   (ideal slope 1.00)
+  scatter around the fit: 0.12 D
+  error after removing a constant offset (+0.37 D): mean 0.10 D, within 0.5 D: 100 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == B_37cm_plus8_7mm
-checkpoints/best.pt
-  sessions with a crescent: 11 of 11
-  fit: network = 0.54 x dial +0.17 D   (ideal slope 1.00)
-  scatter around the fit: 0.42 D
-  error after removing a constant offset (+0.83 D): mean 0.60 D, within 0.5 D: 64 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 11 of 11
   fit: network = 0.83 x dial +0.48 D   (ideal slope 1.00)
   scatter around the fit: 0.34 D
   error after removing a constant offset (+0.88 D): mean 0.35 D, within 0.5 D: 73 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 11 of 11
+  fit: network = 1.11 x dial +0.97 D   (ideal slope 1.00)
+  scatter around the fit: 0.11 D
+  error after removing a constant offset (+0.67 D): mean 0.18 D, within 0.5 D: 100 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == C_37cm_nolens_7mm
-checkpoints/best.pt
-  sessions with a crescent: 8 of 37
-  fit: network = 1.23 x dial -1.49 D   (ideal slope 1.00)
-  scatter around the fit: 0.13 D
-  error after removing a constant offset (-0.80 D): mean 0.16 D, within 0.5 D: 100 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 8 of 37
   fit: network = 0.91 x dial -0.30 D   (ideal slope 1.00)
   scatter around the fit: 0.12 D
   error after removing a constant offset (-0.61 D): mean 0.10 D, within 0.5 D: 100 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 8 of 37
+  fit: network = 0.97 x dial -0.68 D   (ideal slope 1.00)
+  scatter around the fit: 0.12 D
+  error after removing a constant offset (-0.77 D): mean 0.07 D, within 0.5 D: 100 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == D1_37cm_nolens_5mm
-checkpoints/best.pt
+checkpoints/wide_m_only/best.pt
   fewer than 3 sessions with a crescent: no fit
 
-checkpoints/wide_m_only/best.pt
+checkpoints/v3_m_only/best.pt
   fewer than 3 sessions with a crescent: no fit
 
 pupil: measured / set = 1.00 (median). OK.
 
 == D2_37cm_plus5_5mm
-checkpoints/best.pt
-  sessions with a crescent: 5 of 11
-  fit: network = 0.95 x dial +1.84 D   (ideal slope 1.00)
-  scatter around the fit: 0.17 D
-  error after removing a constant offset (+2.03 D): mean 0.15 D, within 0.5 D: 100 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 5 of 11
   fit: network = 0.98 x dial -0.11 D   (ideal slope 1.00)
   scatter around the fit: 0.07 D
   error after removing a constant offset (-0.02 D): mean 0.06 D, within 0.5 D: 100 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 5 of 11
+  fit: network = 0.84 x dial -1.09 D   (ideal slope 1.00)
+  scatter around the fit: 0.09 D
+  error after removing a constant offset (-0.48 D): mean 0.11 D, within 0.5 D: 100 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == E1_30cm_nolens_7mm
-checkpoints/best.pt
-  sessions with a crescent: 4 of 19
-  fit: network = 0.03 x dial +2.83 D   (ideal slope 1.00)
-  scatter around the fit: 0.08 D
-  error after removing a constant offset (-0.36 D): mean 0.51 D, within 0.5 D: 50 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 4 of 19
   fit: network = -0.07 x dial +3.30 D   (ideal slope 1.00)
   scatter around the fit: 0.08 D
   error after removing a constant offset (-0.24 D): mean 0.55 D, within 0.5 D: 50 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 4 of 19
+  fit: network = 0.41 x dial +1.20 D   (ideal slope 1.00)
+  scatter around the fit: 0.03 D
+  error after removing a constant offset (-0.76 D): mean 0.29 D, within 0.5 D: 75 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == E2_30cm_plus5_7mm
-checkpoints/best.pt
-  sessions with a crescent: 6 of 11
-  fit: network = 1.34 x dial +3.30 D   (ideal slope 1.00)
-  scatter around the fit: 0.33 D
-  error after removing a constant offset (+1.88 D): mean 0.29 D, within 0.5 D: 83 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 6 of 11
   fit: network = 0.54 x dial -1.16 D   (ideal slope 1.00)
   scatter around the fit: 0.22 D
   error after removing a constant offset (+0.74 D): mean 0.35 D, within 0.5 D: 83 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 6 of 11
+  fit: network = 0.89 x dial +0.17 D   (ideal slope 1.00)
+  scatter around the fit: 0.05 D
+  error after removing a constant offset (+0.58 D): mean 0.09 D, within 0.5 D: 100 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == F1_25cm_nolens_7mm
-checkpoints/best.pt
-  sessions with a crescent: 3 of 19
-  fit: network = 1.17 x dial -1.74 D   (ideal slope 1.00)
-  scatter around the fit: 0.07 D
-  error after removing a constant offset (-1.12 D): mean 0.08 D, within 0.5 D: 100 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 3 of 19
   fit: network = -0.09 x dial +3.78 D   (ideal slope 1.00)
   scatter around the fit: 0.07 D
   error after removing a constant offset (-0.14 D): mean 0.36 D, within 0.5 D: 67 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 3 of 19
+  fit: network = 0.19 x dial +2.30 D   (ideal slope 1.00)
+  scatter around the fit: 0.10 D
+  error after removing a constant offset (-0.68 D): mean 0.27 D, within 0.5 D: 67 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == F2_25cm_plus6_7mm
-checkpoints/best.pt
-  sessions with a crescent: 4 of 11
-  fit: network = 0.84 x dial +6.14 D   (ideal slope 1.00)
-  scatter around the fit: 0.01 D
-  error after removing a constant offset (+6.83 D): mean 0.09 D, within 0.5 D: 100 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 4 of 11
   fit: network = 0.43 x dial -1.41 D   (ideal slope 1.00)
   scatter around the fit: 0.07 D
   error after removing a constant offset (+1.07 D): mean 0.27 D, within 0.5 D: 75 %
 
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 4 of 11
+  fit: network = 0.66 x dial -0.79 D   (ideal slope 1.00)
+  scatter around the fit: 0.04 D
+  error after removing a constant offset (+0.62 D): mean 0.18 D, within 0.5 D: 100 %
+
 pupil: measured / set = 1.00 (median). OK.
 
 == R_37cm_plus4_7mm_repeat
-checkpoints/best.pt
-  sessions with a crescent: 7 of 11
-  fit: network = 1.80 x dial +3.36 D   (ideal slope 1.00)
-  scatter around the fit: 0.29 D
-  error after removing a constant offset (+0.32 D): mean 0.69 D, within 0.5 D: 43 %
-
 checkpoints/wide_m_only/best.pt
   sessions with a crescent: 7 of 11
   fit: network = 1.20 x dial +0.95 D   (ideal slope 1.00)
   scatter around the fit: 0.11 D
   error after removing a constant offset (+0.21 D): mean 0.19 D, within 0.5 D: 100 %
+
+checkpoints/v3_m_only/best.pt
+  sessions with a crescent: 7 of 11
+  fit: network = 1.25 x dial +1.09 D   (ideal slope 1.00)
+  scatter around the fit: 0.03 D
+  error after removing a constant offset (+0.25 D): mean 0.21 D, within 0.5 D: 100 %
 
 pupil: measured / set = 1.00 (median). OK.

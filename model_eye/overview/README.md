@@ -88,6 +88,8 @@ Open dots: blind band, where the reading is a guess. Blue band: ±0.5 D.
 
 **`fig4_literature.png`**: published deep-learning refraction errors, for scale only (see below).
 
+**`fig5_retrained_network.png`**: old vs retrained network on the same photos (see below).
+
 ---
 
 ## Two things specific to the model eye (and relevant to any real device)
@@ -146,6 +148,53 @@ all sides. It was not chosen for accuracy. Across those four methods the A, D2 a
 
 ---
 
+## Retrained network (`checkpoints/v3_m_only/best.pt`, fig. 5)
+
+**What changed:**
+- refraction range −16 to +8 D (was −12 to +6)
+- distances 20–100 cm (was 25–100)
+- training scenes now include trial-lens reflections
+- 300k simulated photos, 30 epochs
+- error on held-out simulated photos with a crescent: 0.63 D
+
+Same photos, same pupil centres (`data/network_comparison.csv`):
+
+| Block | Old network (mean \|error\|, slope) | New network |
+|---|---|---|
+| A | **0.23 D**, 1.01 | 0.37 D, 1.00 (bias +0.37) |
+| B | 0.90 D, 0.83 | **0.69 D, 1.11** |
+| D2 | **0.07 D**, 0.98 | 0.44 D, 0.84 (bias −0.44) |
+| R | 0.26 D, 1.20 | 0.26 D, 1.25 |
+| E2 (30 cm) | 0.66 D, 0.54 | **0.57 D, 0.89** |
+| F2 (25 cm) | 1.01 D, 0.43 | **0.65 D, 0.66** |
+| C (no lens) | **0.59 D**, 0.91 | 0.78 D, 0.97 |
+
+**What retraining was meant to fix, it fixed:** the readings no longer flatten out for strong myopia or
+close distances. B at −13.3 D now reads −12.7 instead of −11.6, and the 30 cm slope went from 0.54 to 0.89.
+
+**What it did not fix:** biases of ±0.4–0.7 D that change sign from block to block. Those are the
+simulator-vs-reality mismatch (item 3 above), and no amount of training on the same simulator removes them.
+Neither network is better everywhere, so `checkpoints/best.pt` was left as it was.
+
+---
+
+## Next steps, in order
+
+1. **Find the trial-lens mismatch** (item 3). Two cheap tests with no new photos:
+   - Re-simulate the A/B/E2/F2 crescents with the lens as a separate element 5 mm in front of the pupil
+     (not merged into the eye's refraction). See whether the myopic band edge moves out by 1.2–1.4×.
+   - Measure the camera's LED-to-lens distance and the lens aperture directly (ruler photo), so the geometry
+     is not in doubt.
+2. **Once the simulator matches the band edges, regenerate and retrain.** Only then can one network be right
+   at all distances and with all lenses.
+3. **Bring the pupil-centring lesson to human eyes.** On a real eye the iris edge is the pupil, but frames are
+   blurry and the eye moves. A ±0.5 mm centring error costs about 0.3 D, so the own-eye pipeline needs a
+   centring check: stack the reflex over a trial-lens sweep, as done here.
+4. **Human validation** against subjective refraction. That is the only comparison that puts this work
+   alongside the studies below.
+
+---
+
 ## Comparison with published work
 
 | Study | Eyes | Images | Reference | Result |
@@ -183,3 +232,4 @@ of red reflex images. *Diagnostics* 2023;13(17):2810. https://doi.org/10.3390/di
 - `data/metrics.csv`: the results table.
 - `data/disc_centre_*.csv`: the same blocks analysed around the dark-disc centre (for fig. 2b).
 - `data/sensitivity.json`: readings with the pupil centre moved by ±0.5/1/2 mm (fig. 2c); 6 sessions from A and B.
+- `data/network_comparison.csv`: old vs retrained network per block (fig. 5).

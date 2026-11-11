@@ -271,3 +271,43 @@ for m in metrics:
           f"<=0.5 {100 * m['within05']:.0f}%  slope {m['slope']:.2f}  | disc centre MAE {m['mae_disc']:.2f}")
 print(f"37 cm pooled MAE {ours37:.2f} D (n {n37}); 25-30 cm pooled {ours_near:.2f} D (n {n_near})")
 print("band edges 37 cm 7 mm:", {k: tuple(round(float(x), 2) for x in v) for k, v in EDGES.items()})
+
+# ---------------------------------------------------------------- fig 5: old vs new network
+NET2 = "checkpoints/v3_m_only/best.pt"
+cmp_blocks = list(BLOCKS) + ["C_37cm_nolens_7mm"]
+labels = {**{b: v[0].split()[0] + f" ({v[0].split()[1]} cm)" for b, v in BLOCKS.items()}, "C_37cm_nolens_7mm": "C (37 cm, no lens)"}
+stats = {}
+for b in cmp_blocks:
+    allr = list(csv.DictReader(open(ROOT / "model_eye/results" / b / "results.csv")))
+    for net in (NET, NET2):
+        u = [r for r in allr if r["network"] == net and r["crescent_seen"] == "True"]
+        d = arr(u, "dial_d"); e = arr(u, "net_eye_ir") - d
+        stats[(b, net)] = dict(mae=np.abs(e).mean(), bias=e.mean(), slope=np.polyfit(d, d + e, 1)[0], n=len(u))
+fig, axs = plt.subplots(1, 2, figsize=(12, 4.6))
+yy = np.arange(len(cmp_blocks))[::-1]
+for ax, key, xl in ((axs[0], "mae", "mean |network - dial| over crescent settings (D)"),
+                    (axs[1], "slope", "slope of network vs dial (ideal 1.00)")):
+    for i, b in zip(yy, cmp_blocks):
+        ax.plot([stats[(b, NET)][key], stats[(b, NET2)][key]], [i, i], color=GRID, lw=3, zorder=1)
+    ax.scatter([stats[(b, NET)][key] for b in cmp_blocks], yy, s=60, color=S2, edgecolors=SURF, lw=1.5, zorder=3,
+               label="old: wide_m_only (-12..+6 D, 25-100 cm)")
+    ax.scatter([stats[(b, NET2)][key] for b in cmp_blocks], yy, s=60, color=S1, edgecolors=SURF, lw=1.5, zorder=4,
+               label="new: v3_m_only (-16..+8 D, 20-100 cm, lens reflections)")
+    ax.set_yticks(yy); ax.set_yticklabels([labels[b] for b in cmp_blocks])
+    ax.set_xlabel(xl)
+axs[1].axvline(1.0, color=INK2, lw=0.8, ls="--")
+h, l = axs[0].get_legend_handles_labels()
+fig.legend(h, l, loc="lower center", ncol=2, fontsize=8, frameon=False)
+axs[0].set_xlim(0, None)
+axs[0].set_title("a  Error", loc="left"); axs[1].set_title("b  Slope", loc="left")
+fig.suptitle("Fig. 5  Retrained network: strong myopia (B) and close distances (E2, F2) now track with slope near 1;\n"
+             "the +4/+5 lens blocks at 37 cm got a 0.4 D bias. Neither network is better everywhere.",
+             x=0.01, ha="left", fontsize=10)
+fig.tight_layout(rect=(0, 0.07, 1, 0.9))
+fig.savefig(HERE / "fig5_retrained_network.png", dpi=150)
+plt.close(fig)
+with open(HERE / "data" / "network_comparison.csv", "w", newline="") as fh:
+    w = csv.writer(fh)
+    w.writerow(["block", "network", "n", "mae", "bias", "slope"])
+    for (b, net), v in stats.items():
+        w.writerow([b, net, v["n"], round(v["mae"], 3), round(v["bias"], 3), round(v["slope"], 3)])
