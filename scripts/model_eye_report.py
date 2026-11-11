@@ -63,6 +63,7 @@ def load_net(path):
 
 
 SEED_R = 110   # px from the crop centre where the glint may be
+SELF_CHECK_TOL = 0.15   # |slope - 1| allowed by the lens-step self-check
 
 
 def auto_centre(session, save=None):
@@ -390,6 +391,12 @@ def report(paths, out, args):
                          f"  scatter around the fit: {resid.std():.2f} D\n"
                          f"  error after removing a constant offset ({np.median(yu - xu):+.2f} D): "
                          f"mean {err1.mean():.2f} D, within 0.5 D: {100 * (err1 <= 0.5).mean():.0f} %\n")
+            # Self-check that needs no true answer: a known lens/dial step must move the
+            # reading by the same amount. Only the steps are used, never the dial value itself.
+            ok = abs(slope - 1.0) <= SELF_CHECK_TOL and len(use) >= 4
+            lines.append(f"  self-check (reading change per D of known lens change): {slope:.2f} -> "
+                         + ("PASS" if ok else ("too few steps" if len(use) < 4 else
+                                               "FAIL: readings in this block are not trustworthy")) + "\n")
             xx = np.linspace(xu.min(), xu.max(), 2)
             ax[0].plot(xx, slope * xx + off, color=f"C{k}", lw=1)
         else:
