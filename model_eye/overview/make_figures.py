@@ -3,22 +3,22 @@ Makes the overview figures in this folder from the model-eye results.
 
   /opt/anaconda3/bin/python model_eye/overview/make_figures.py
 
-Reads   model_eye/results/<block>/results.csv          (current analysis: reflex centring)
-        model_eye/overview/data/disc_centre_<block>.csv (same photos, old dark-disc centring)
-        model_eye/overview/data/sensitivity.json         (pupil-centre shift experiment)
-        model_eye/sessions/<block>/<session>/             (photo crops, for the image strip)
-Writes  fig1_accuracy.png  fig2_pupil_centring.png  fig3_physics.png  fig4_literature.png
-        data/metrics.csv
+Reads   model_eye/results/<block>/results.csv   (from scripts/model_eye_report.py)
+        model_eye/sessions/<block>/<session>/    (the photos, for figs 2 and 3)
+Writes  fig1_accuracy.png  fig2_real_vs_simulated.png  fig3_physics.png  fig4_literature.png
+        tables/metrics.csv
 
-All network numbers are the wide_m_only network. "Error" is network reading
-minus the dial setting, with NO correction: the dial is calibrated in visible
-light and the model eye's own 850 nm offset is unknown, so it stays in the error.
+Network: checkpoints/wide_m_only/best.pt, the best of the networks tested on these photos
+(tables/network_comparison.csv). "Error" = network reading minus the dial setting, no corrections.
 """
 
+import contextlib
 import csv
+import io
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import matplotlib
@@ -32,48 +32,44 @@ NET = "checkpoints/wide_m_only/best.pt"
 
 # Reference palette (dataviz skill), light surface.
 SURF, INK, INK2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
-S1, S2, S3 = "#2a78d6", "#eb6834", "#1baf7a"
+S1, S2 = "#2a78d6", "#eb6834"
 plt.rcParams.update({"figure.facecolor": SURF, "axes.facecolor": SURF, "savefig.facecolor": SURF,
                      "axes.edgecolor": INK2, "axes.labelcolor": INK, "xtick.color": INK2, "ytick.color": INK2,
                      "text.color": INK, "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6,
-                     "axes.spines.top": False, "axes.spines.right": False, "font.size": 9,
-                     "axes.titlesize": 10, "axes.titleweight": "bold"})
+                     "axes.spines.top": False, "axes.spines.right": False, "font.size": 10,
+                     "axes.titlesize": 11, "axes.titleweight": "bold"})
 
-BLOCKS = {  # block: (label, lens D)
-    "A_37cm_plus4_7mm": ("A  37 cm, +4 lens, 7 mm", 4),
-    "B_37cm_plus8_7mm": ("B  37 cm, +8 lens, 7 mm", 8),
-    "D2_37cm_plus5_5mm": ("D2  37 cm, +5 lens, 5 mm", 5),
-    "R_37cm_plus4_7mm_repeat": ("R  37 cm, +4 lens, re-placed", 4),
-    "E2_30cm_plus5_7mm": ("E2  30 cm, +5 lens, 7 mm", 5),
-    "F2_25cm_plus6_7mm": ("F2  25 cm, +6 lens, 7 mm", 6),
+BLOCKS = {  # block: title
+    "A_37cm_plus4_7mm": "A: 37 cm, +4 lens",
+    "D2_37cm_plus5_5mm": "D2: 37 cm, +5 lens, 5 mm pupil",
+    "R_37cm_plus4_7mm_repeat": "R: A again, eye taken off and put back",
+    "B_37cm_plus8_7mm": "B: 37 cm, +8 lens",
+    "E2_30cm_plus5_7mm": "E2: 30 cm, +5 lens",
+    "F2_25cm_plus6_7mm": "F2: 25 cm, +6 lens",
 }
 
 
-def rows(path):
-    return [r for r in csv.DictReader(open(path)) if r["network"] == NET]
+def rows(b, net=NET):
+    return [r for r in csv.DictReader(open(ROOT / "model_eye/results" / b / "results.csv")) if r["network"] == net]
 
 
 def arr(rs, key):
     return np.array([float(r[key]) for r in rs])
 
 
-def seen(rs):
-    return np.array([r["crescent_seen"] == "True" for r in rs])
+def lens_eff(P, vertex=5.0):
+    return P / (1 - vertex * 1e-3 * P)
 
 
 # ---------------------------------------------------------------- metrics
 metrics = []
 for b in BLOCKS:
-    now = rows(ROOT / "model_eye/results" / b / "results.csv")
-    old = {r["session"]: r for r in rows(HERE / "data" / f"disc_centre_{b}.csv")}
-    use = [r for r in now if r["crescent_seen"] == "True"]
-    err = arr(use, "net_eye_ir") - arr(use, "dial_d")
-    err_old = np.array([float(old[r["session"]]["net_eye_ir"]) - float(r["dial_d"]) for r in use])
-    slope = np.polyfit(arr(use, "dial_d"), arr(use, "net_eye_ir"), 1)[0] if len(use) >= 3 else np.nan
-    metrics.append(dict(block=b, dist_cm=float(use[0]["dist_cm"]), n=len(use), mae=np.abs(err).mean(),
-                        bias=err.mean(), within05=(np.abs(err) <= 0.5).mean(), slope=slope,
-                        mae_disc=np.abs(err_old).mean(), bias_disc=err_old.mean()))
-with open(HERE / "data" / "metrics.csv", "w", newline="") as fh:
+    use = [r for r in rows(b) if r["crescent_seen"] == "True"]
+    d, e = arr(use, "dial_d"), arr(use, "net_eye_ir") - arr(use, "dial_d")
+    metrics.append(dict(block=b, dist_cm=float(use[0]["dist_cm"]), n=len(use), mae=float(np.abs(e).mean()),
+                        bias=float(e.mean()), within05=float((np.abs(e) <= 0.5).mean()),
+                        slope=float(np.polyfit(d, d + e, 1)[0])))
+with open(HERE / "tables" / "metrics.csv", "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=list(metrics[0]))
     w.writeheader()
     for m in metrics:
@@ -81,87 +77,86 @@ with open(HERE / "data" / "metrics.csv", "w", newline="") as fh:
 M = {m["block"]: m for m in metrics}
 
 # ---------------------------------------------------------------- fig 1: accuracy
-fig, axes = plt.subplots(2, 3, figsize=(12, 7.6), sharex=False, sharey=False)
-for ax, (b, (label, lens)) in zip(axes.flat, BLOCKS.items()):
-    rs = rows(ROOT / "model_eye/results" / b / "results.csv")
-    x, y, s = arr(rs, "dial_d"), arr(rs, "net_eye_ir"), seen(rs)
-    lo, hi = min(x.min(), -5.5) - 0.3, max(x.max(), 0) + 0.3
-    t = np.linspace(lo, hi, 2)
-    ax.fill_between(t, t - 0.5, t + 0.5, color=S1, alpha=0.10, lw=0, label="within 0.5 D")
-    ax.plot(t, t, color=INK2, lw=1, ls="--", label="perfect")
-    ax.scatter(x[~s], y[~s], s=34, facecolors=SURF, edgecolors=INK2, lw=1, zorder=3,
-               label="blind band (no crescent)")
-    ax.scatter(x[s], y[s], s=40, color=S1, edgecolors=SURF, lw=1.5, zorder=4, label="crescent visible")
+fig, axes = plt.subplots(2, 3, figsize=(13, 8.4))
+for ax, (b, title) in zip(axes.flat, BLOCKS.items()):
+    rs = rows(b)
+    x, y = arr(rs, "dial_d"), arr(rs, "net_eye_ir")
+    s = np.array([r["crescent_seen"] == "True" for r in rs])
+    t = np.array([-5.6, 0.3])
+    ax.fill_between(t, t - 0.5, t + 0.5, color=S1, alpha=0.12, lw=0, label="within 0.5 D of the truth")
+    ax.plot(t, t, color=INK2, lw=1, ls="--", label="perfect reading")
+    ax.scatter(x[s], y[s], s=46, color=S1, edgecolors=SURF, lw=1.5, zorder=4, label="crescent in the photo")
+    ax.scatter(x[~s], y[~s], s=40, facecolors=SURF, edgecolors="#9a998f", lw=1, zorder=3,
+               label="no crescent (blind band):\nnothing to measure")
     m = M[b]
-    ax.set_title(label, loc="left")
-    ax.text(0.03, 0.97, f"crescent settings: {m['n']}\nmean |error| {m['mae']:.2f} D\nmean error {m['bias']:+.2f} D\n"
-            f"within 0.5 D: {100 * m['within05']:.0f} %", transform=ax.transAxes, va="top", fontsize=8,
-            color=INK, bbox=dict(boxstyle="round,pad=0.35", fc=SURF, ec=GRID))
-    ax.set_xlim(lo, hi); ax.set_ylim(min(lo, y.min() - 0.5), max(hi, y.max() + 0.5))
-    ax.set_xlabel("model eye dial setting (D)"); ax.set_ylabel("network reading of the eye (D)")
-axes.flat[0].legend(loc="lower right", fontsize=7, frameon=False)
-fig.suptitle("Fig. 1  Network reading vs the refraction set on the model eye (trial lens added back)\n"
-             "A, D2, R (37 cm, +4/+5 lens): within 0.5 D, no bias. B (+8 lens) and the closer distances E2, F2 read too weak.",
-             x=0.01, ha="left", fontsize=10)
-fig.tight_layout(rect=(0, 0, 1, 0.95))
+    ax.set_title(title, loc="left", fontsize=10.5)
+    ax.text(0.97, 0.04, f"average error {m['mae']:.2f} D\n{100 * m['within05']:.0f} % within 0.5 D",
+            transform=ax.transAxes, ha="right", va="bottom", fontsize=9.5, color=INK,
+            bbox=dict(boxstyle="round,pad=0.4", fc=SURF, ec=GRID))
+    ax.set_xlim(-5.6, 0.3)
+    ax.set_ylim(-6.5, 4.5)
+    ax.set_xlabel("true refraction set on the model eye (D)")
+    ax.set_ylabel("network reading (D)")
+axes.flat[0].legend(loc="upper left", fontsize=8, frameon=False)
+fig.suptitle("Fig. 1  What the network reads vs the true refraction (each dot = one setting, 20 photos)",
+             x=0.01, ha="left", fontsize=12, fontweight="bold")
+fig.text(0.01, 0.935, "Top row: 37 cm with a +4/+5 lens - readings sit on the perfect line.   "
+         "Bottom row: the +8 lens and the closer distances read 0.6-1.0 D too weak.", fontsize=10, color=INK2)
+fig.tight_layout(rect=(0, 0, 1, 0.93))
 fig.savefig(HERE / "fig1_accuracy.png", dpi=150)
 plt.close(fig)
 
-# ---------------------------------------------------------------- fig 2: pupil centring
-sens = json.loads((HERE / "data" / "sensitivity.json").read_text())
-fig = plt.figure(figsize=(13, 4.6))
-gs = fig.add_gridspec(1, 3, width_ratios=[1.05, 1.1, 1.1])
-ax0 = fig.add_subplot(gs[0])
-ax0.imshow(plt.imread(ROOT / "model_eye/results/F1_25cm_nolens_7mm/pupil_reflex.png")[:, :, :3])
-ax0.axis("off")
-ax0.set_title("a  25 cm, blocks F1+F2: all light that came back through\nthe aperture fills a disc of exactly the set 7 mm",
-              loc="left", fontsize=9)
+# ---------------------------------------------------------------- fig 2: real vs simulated photos
+import measure_eye as me  # noqa: E402
+import torch  # noqa: E402
+from model_eye_report import load_net  # noqa: E402
+from eyesim.cnn import normalize_frames  # noqa: E402
+from eyesim.photorefraction import Eye, Geometry, Scene, render_pair  # noqa: E402
 
-ax1 = fig.add_subplot(gs[1])
-names = [BLOCKS[b][0].split()[0] for b in BLOCKS]
-yy = np.arange(len(BLOCKS))[::-1]
-for i, b in zip(yy, BLOCKS):
-    ax1.plot([M[b]["mae_disc"], M[b]["mae"]], [i, i], color=GRID, lw=3, zorder=1)
-ax1.scatter([M[b]["mae_disc"] for b in BLOCKS], yy, s=60, color=S2, edgecolors=SURF, lw=1.5, zorder=3,
-            label="centre of dark disc (old)")
-ax1.scatter([M[b]["mae"] for b in BLOCKS], yy, s=60, color=S1, edgecolors=SURF, lw=1.5, zorder=4,
-            label="centre from the reflex (new)")
-for i, b in zip(yy, BLOCKS):
-    ax1.text(max(M[b]["mae_disc"], M[b]["mae"]) + 0.45, i, f"{M[b]['mae_disc']:.2f} → {M[b]['mae']:.2f} D",
-             va="center", fontsize=8, color=INK)
-ax1.set_yticks(yy); ax1.set_yticklabels([f"{n} ({M[b]['dist_cm']:.0f} cm)" for n, b in zip(names, BLOCKS)])
-ax1.set_xlabel("mean |network − dial| over crescent settings (D)")
-ax1.set_xlim(0, max(M[b]["mae_disc"] for b in BLOCKS) + 2.2)
-ax1.legend(loc="lower right", fontsize=7, frameon=False)
-ax1.set_title("b  Same photos, same network, only the pupil centre changed", loc="left", fontsize=9)
-
-ax2 = fig.add_subplot(gs[2])
-shifts = [-2, -1, -0.5, 0, 0.5, 1, 2]
-for axis, col, lab in (("x", S1, "shift along the H LED axis"), ("y", S3, "shift across it")):
-    curves = []
-    for key in sorted({k.rsplit("|", 2)[0] for k in sens}):
-        base = sens[f"{key}|{axis}|0"]
-        curves.append([sens[f"{key}|{axis}|{s}"] - base for s in shifts])
-    c = np.array(curves)
-    for cv in c:
-        ax2.plot(shifts, cv, color=col, lw=0.8, alpha=0.35)
-    ax2.plot(shifts, np.median(c, 0), color=col, lw=2, marker="o", ms=5, label=f"{lab} (median of {len(c)})")
-ax2.axhspan(-0.25, 0.25, color=INK2, alpha=0.08, lw=0)
-ax2.set_ylim(-2.5, 2.5)
-ax2.set_xlabel("pupil centre moved by (mm, at the eye)"); ax2.set_ylabel("change in reading (D)")
-ax2.legend(loc="upper left", fontsize=7, frameon=False)
-ax2.text(0.98, 0.03, "grey band: ±0.25 D (one prescription step)\n±2 mm: off the scale (+5 to +7 D)",
-         transform=ax2.transAxes, ha="right", fontsize=7, color=INK2)
-ax2.set_title("c  Cost of a centring error\n(6 sessions from blocks A and B)", loc="left", fontsize=9)
-fig.suptitle("Fig. 2  The pupil centre decides the reading", x=0.01, ha="left", fontsize=11, fontweight="bold")
-fig.tight_layout(rect=(0, 0, 1, 0.94))
-fig.savefig(HERE / "fig2_pupil_centring.png", dpi=150)
+model, cfg = load_net(ROOT / NET)
+margs = SimpleNamespace(hflip=False, vflip=False, brightness="glint", reclick=False, focal_mm=4.74, pixel_um=1.4,
+                        refine=False, ecc_mm=None)
+CASES = [  # block, dial
+    ("C_37cm_nolens_7mm", "+4"), ("C_37cm_nolens_7mm", "+0"), ("A_37cm_plus4_7mm", "-2"),
+    ("A_37cm_plus4_7mm", "-3"), ("A_37cm_plus4_7mm", "-5"), ("B_37cm_plus8_7mm", "-5"),
+]
+rng = np.random.default_rng(1)
+fig, axes = plt.subplots(len(CASES), 4, figsize=(8.6, 2.25 * len(CASES)))
+for row, (b, dial) in zip(axes, CASES):
+    s = next((ROOT / "model_eye/sessions" / b).glob(f"*true{dial}-p*"))
+    with contextlib.redirect_stdout(io.StringIO()):
+        r = me.measure(s, model, cfg, margs)
+    meta = r["meta"]
+    true_sys = meta["true_rx"] - lens_eff(meta.get("lens_d", 0.0))
+    sim = render_pair(Eye(M=true_sys, pupil_r_mm=meta["pupil_mm"] / 2, scatter_mrad=2.0, sa_d_per_mm2=0.12),
+                      Geometry(d_mm=meta["dist_mm"], ecc_mm=meta["ecc_mm"], aperture_r_mm=1.3),
+                      Scene(fill=me.FILL, glint_amp=1.0, glint_pos_frac=(-0.25, 0.25), red_reflex=0.0,
+                            surround=0.0, blur_px=1.0, read_noise=0.004, shot_noise=0.008), rng).transpose(2, 0, 1)
+    real = normalize_frames(torch.from_numpy(np.asarray(r["centred"], np.float32))[None])[0].numpy()
+    simn = normalize_frames(torch.from_numpy(np.asarray(sim, np.float32))[None])[0].numpy()
+    for k, (img, lab) in enumerate([(real[0], "photo, H LED"), (simn[0], "simulated, H LED"),
+                                    (real[1], "photo, V LED"), (simn[1], "simulated, V LED")]):
+        a = row[k]
+        a.imshow(img, cmap="gray", vmin=0, vmax=1.2)
+        a.set_xticks([]); a.set_yticks([]); a.grid(False)
+        for sp in a.spines.values():
+            sp.set_visible(True); sp.set_color(S1 if "photo" in lab else S2); sp.set_linewidth(2)
+        if row is axes[0]:
+            a.set_title(lab, fontsize=9.5, color=INK)
+    lens = meta.get("lens_d", 0.0)
+    row[0].set_ylabel(f"eye + lens {true_sys:+.1f} D\n(dial {meta['true_rx']:+g}" + (f", +{lens:g} lens)" if lens else ")")
+                      + f"\nnetwork: {r['sys_ir'][0]:+.1f} D", fontsize=8.5)
+fig.suptitle("Fig. 2  Real photos (blue frame) next to the simulator\nat the same refraction (orange frame)",
+             x=0.01, ha="left", fontsize=12, fontweight="bold")
+fig.text(0.01, 0.005, "Same crop and brightness scaling the network uses. H LED is right of the camera, V LED above it.\n"
+         "Crescent side and growth match. Real crescents are softer, and shorter top-to-bottom than the simulated ones.",
+         fontsize=8.5, color=INK2)
+fig.tight_layout(rect=(0, 0.035, 1, 0.94))
+fig.savefig(HERE / "fig2_real_vs_simulated.png", dpi=150)
 plt.close(fig)
 
+
 # ---------------------------------------------------------------- fig 3: physics
-import measure_eye as me  # noqa: E402
-
-
 def mean_frame(s, ch):
     meta = json.loads((s / "meta.json").read_text())
     acc = 0
@@ -171,143 +166,81 @@ def mean_frame(s, ch):
     return acc / meta["shots"]
 
 
-fig = plt.figure(figsize=(13, 7.4))
-gs = fig.add_gridspec(2, 7, height_ratios=[1, 1.5])
+fig = plt.figure(figsize=(13, 7.6))
+gs = fig.add_gridspec(2, 7, height_ratios=[1, 1.55])
 blk = ROOT / "model_eye/sessions/A_37cm_plus4_7mm"
-dials = ["+0", "-1", "-1.5", "-2", "-3", "-4", "-5"]
 imgs = []
-for d in dials:
+for d in ["+0", "-1", "-1.5", "-2", "-3", "-4", "-5"]:
     s = next(blk.glob(f"*true{d}-p*"))
-    cx, cy, r = json.loads((s / "clicks.json").read_text())["pupil_xy_r"]
-    h = int(1.6 * r)
-    imgs.append((d, mean_frame(s, "H")[int(cy) - h:int(cy) + h, int(cx) - h:int(cx) + h], r, h))
+    cx, cy, rr = json.loads((s / "clicks.json").read_text())["pupil_xy_r"]
+    h = int(1.6 * rr)
+    imgs.append((float(d), mean_frame(s, "H")[int(cy) - h:int(cy) + h, int(cx) - h:int(cx) + h], rr, h))
 vmax = max(np.percentile(im, 99.0) for _, im, _, _ in imgs)
-lens_eff = 4 / (1 - 0.005 * 4)
-for k, (d, im, r, h) in enumerate(imgs):
+for k, (d, im, rr, h) in enumerate(imgs):
     ax = fig.add_subplot(gs[0, k])
     ax.imshow(im, cmap="gray", vmax=vmax)
-    ax.add_patch(plt.Circle((h, h), r, fill=False, color=S1, lw=0.8))
-    ax.set_xticks([]); ax.set_yticks([])
-    ax.set_title(f"dial {float(d):+.1f}\neye+lens {float(d) - lens_eff:+.1f} D", fontsize=8)
-fig.text(0.01, 0.965, "a  Block A, H-LED photos (LED to the right), blue circle = 7 mm aperture. In the blind band the pupil is dark;\n"
-         "    past it a crescent appears on the LED side and grows with myopia. That growth is what the network reads.",
-         fontsize=9, fontweight="bold", va="top")
+    ax.add_patch(plt.Circle((h, h), rr, fill=False, color=S1, lw=0.8))
+    ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+    ax.set_title(f"eye + lens\n{d - lens_eff(4):+.1f} D", fontsize=9)
+fig.text(0.01, 0.975, "a  Block A photos, H LED (to the right). Blue circle = the 7 mm pupil. Close to the camera's focus the "
+         "pupil is dark;\n    further away a crescent appears on the LED side and grows. The network reads that growth.",
+         fontsize=10, fontweight="bold", va="top")
 
 ax = fig.add_subplot(gs[1, :])
-rs = rows(ROOT / "model_eye/results/A_37cm_plus4_7mm/results.csv") + \
-    rows(ROOT / "model_eye/results/B_37cm_plus8_7mm/results.csv") + \
-    rows(ROOT / "model_eye/results/C_37cm_nolens_7mm/results.csv")
-sysM = np.array([float(r["dial_d"]) - float(r["lens_d"]) / (1 - 0.005 * float(r["lens_d"])) for r in rs])
+rs = rows("A_37cm_plus4_7mm") + rows("B_37cm_plus8_7mm") + rows("C_37cm_nolens_7mm")
+sysM = np.array([float(r["dial_d"]) - lens_eff(float(r["lens_d"])) for r in rs])
 side = np.array([0.5 * (float(r["side_H"]) + float(r["side_V"])) for r in rs])
 Ms, cls = me.side_curve(370, 10.0, 2.6, 3.5)
-ax.step(Ms, 0.35 * cls, where="mid", color=S2, lw=2, label="simulator: crescent side class (scaled)")
-ax.scatter(sysM, side, s=26, color=S1, edgecolors=SURF, lw=1, zorder=3,
-           label="real photos, blocks A, B, C (mean of H and V)")
-ax.axhline(me.SIDE_MIN, color=INK2, lw=0.6, ls=":"); ax.axhline(-me.SIDE_MIN, color=INK2, lw=0.6, ls=":")
-ax.axvline(-1000 / 370, color=INK2, lw=0.8, ls="--")
-ax.text(-1000 / 370 + 0.15, 0.45, "null (eye focused\non the camera)", fontsize=7, color=INK2)
-# Band edges. Simulator: where its class changes. Photos: the dark plateau is the
-# median inside the simulated band; an edge is half-way between the last
-# plateau point and the first point more than SIDE_MIN beyond it.
+ax.step(Ms, 0.35 * cls, where="mid", color=S2, lw=2, label="simulator")
+ax.scatter(sysM, side, s=30, color=S1, edgecolors=SURF, lw=1, zorder=3, label="real photos (blocks A, B, C)")
+null = -1000 / 370
+ax.axvline(null, color=INK2, lw=0.8, ls="--")
+ax.text(null + 0.15, 0.46, "eye focused exactly\non the camera", fontsize=8, color=INK2)
+ax.text(-12.5, 0.43, "crescent on the LED side\n(eye more myopic than the camera focus)", fontsize=9, color=INK)
+ax.text(2.2, -0.15, "crescent on the far side\n(more hyperopic)", fontsize=9, color=INK)
 sim_lo = Ms[np.nonzero(cls == 0)[0][0]] - 0.125
 sim_hi = Ms[np.nonzero(cls == 0)[0][-1]] + 0.125
-o = np.argsort(sysM); xs, ys = sysM[o], side[o]
-plateau = np.median(ys[(xs > sim_lo) & (xs < sim_hi)])
-lit_m = np.nonzero((ys > plateau + me.SIDE_MIN) & (xs < -1000 / 370))[0][-1]
-lit_h = np.nonzero((ys < plateau - me.SIDE_MIN) & (xs > -1000 / 370))[0][0]
-real_lo, real_hi = 0.5 * (xs[lit_m] + xs[lit_m + 1]), 0.5 * (xs[lit_h - 1] + xs[lit_h])
-null = -1000 / 370
-EDGES = dict(sim=(sim_lo, sim_hi), real=(real_lo, real_hi))
-ax.annotate("", xy=(sim_lo, -0.47), xytext=(sim_hi, -0.47), arrowprops=dict(arrowstyle="<->", color=S2, lw=1.2))
-ax.text(0.5 * (sim_lo + sim_hi), -0.44, f"simulated blind band {sim_lo:+.1f} to {sim_hi:+.1f} D", color=INK, fontsize=8,
-        ha="center")
-ax.annotate("", xy=(real_lo, -0.57), xytext=(real_hi, -0.57), arrowprops=dict(arrowstyle="<->", color=S1, lw=1.2))
-ax.text(0.5 * (real_lo + real_hi), -0.66, f"real blind band {real_lo:+.1f} to {real_hi:+.1f} D: myopic edge "
-        f"{(null - real_lo) / (null - sim_lo):.1f}x as far from the null, hyperopic edge {real_hi - sim_hi:+.1f} D",
-        color=INK, fontsize=8, ha="center")
-ax.set_xlim(-14, 5); ax.set_ylim(-0.72, 0.55)
-ax.set_xlabel("eye + trial lens refraction (D, dial minus effective lens power)")
-ax.set_ylabel("crescent position (+ LED side, − far side)")
-ax.legend(loc="upper right", fontsize=8, frameon=False)
-ax.set_title("b  37 cm, 7 mm pupil: crescent side vs refraction. Same shape as the simulator; the myopic edge is further out.\n"
-             "    Every point left of the band was taken through a trial lens, every point right of it without one.",
-             loc="left", fontsize=9)
-fig.tight_layout(rect=(0, 0, 1, 0.95))
+ax.axvspan(sim_lo, sim_hi, color=S2, alpha=0.07, lw=0)
+ax.text(0.5 * (sim_lo + sim_hi), -0.5, "blind band: no crescent, so the pupil carries no reading.\n"
+        "A trial lens moves the eye out of it.", ha="center", fontsize=9, color=INK)
+ax.set_xlim(-14, 5); ax.set_ylim(-0.62, 0.58)
+ax.set_xlabel("refraction of eye + trial lens (D)")
+ax.set_ylabel("where the light sits in the pupil\n(+ LED side,  − far side)")
+ax.legend(loc="upper right", fontsize=9, frameon=False)
+ax.set_title("b  37 cm, 7 mm pupil: same pattern as the simulator. Real edges are 0.3-0.8 D further out "
+             "(probably: a faint first crescent is lost in real noise)", loc="left", fontsize=10)
+fig.tight_layout(rect=(0, 0, 1, 0.93))
 fig.savefig(HERE / "fig3_physics.png", dpi=150)
 plt.close(fig)
 
 # ---------------------------------------------------------------- fig 4: literature
-d37 = [m for m in metrics if m["dist_cm"] == 37.0]
-ours37 = np.average([m["mae"] for m in d37], weights=[m["n"] for m in d37])
-n37 = sum(m["n"] for m in d37)
-near = [m for m in metrics if m["dist_cm"] < 37.0]
-ours_near = np.average([m["mae"] for m in near], weights=[m["n"] for m in near])
-n_near = sum(m["n"] for m in near)
-entries = [  # label, MAE (D), ours?
-    (f"This work, model eye, 37 cm\n({n37} settings, blocks A B D2 R)", ours37, True),
-    (f"This work, model eye, 25-30 cm\n({n_near} settings, blocks E2 F2)", ours_near, True),
-    ("Xu et al. 2022, human eyes\nNIR photorefraction, 6 LED meridians, 1 m", 0.1835, False),
-    ("Varadarajan et al. 2018, human eyes\nretinal fundus photos, UK Biobank", 0.56, False),
-    ("Varadarajan et al. 2018, human eyes\nretinal fundus photos, AREDS", 0.91, False),
+good = [m for m in metrics if m["block"] in ("A_37cm_plus4_7mm", "D2_37cm_plus5_5mm", "R_37cm_plus4_7mm_repeat")]
+all_lens = metrics
+ours_good = np.average([m["mae"] for m in good], weights=[m["n"] for m in good])
+ours_all = np.average([m["mae"] for m in all_lens], weights=[m["n"] for m in all_lens])
+entries = [
+    (f"This work: model eye, 37 cm, +4/+5 lens\n({sum(m['n'] for m in good)} settings)", ours_good, True),
+    (f"This work: all lens blocks incl. +8 lens, 25-30 cm\n({sum(m['n'] for m in all_lens)} settings)", ours_all, True),
+    ("Xu et al. 2022: human eyes, infrared\nphotorefraction, 6 LED directions, 1 m", 0.1835, False),
+    ("Varadarajan et al. 2018: human eyes,\nretina photos (UK Biobank)", 0.56, False),
+    ("Varadarajan et al. 2018: human eyes,\nretina photos (AREDS)", 0.91, False),
 ]
-fig, ax = plt.subplots(figsize=(10.5, 4.6))
+fig, ax = plt.subplots(figsize=(10.5, 4.8))
 yy = np.arange(len(entries))[::-1]
 for i, (lab, v, ours) in zip(yy, entries):
     ax.barh(i, v, height=0.55, color=S1 if ours else "#b9b8b2", edgecolor=SURF)
-    ax.text(v + 0.02, i, f"{v:.2f} D", va="center", fontsize=9, color=INK)
-ax.set_yticks(yy); ax.set_yticklabels([e[0] for e in entries], fontsize=8)
-ax.set_xlabel("mean absolute error of the spherical equivalent (D)")
-ax.set_xlim(0, 1.15); ax.grid(axis="y", visible=False)
-ax.set_title("Fig. 4  Published deep-learning refraction errors, for scale (not a like-for-like comparison)", loc="left")
-fig.text(0.01, 0.01, "Different eyes, references and setups. Ours: a schematic eye against its dial (no 850 nm correction), "
-         "network trained only on simulated photos.\nOthers: human eyes against autorefraction / subjective refraction, "
-         "trained on thousands of real images. Classification-only studies (no MAE) are in README.md.", fontsize=7, color=INK2)
+    ax.text(v + 0.02, i, f"{v:.2f} D", va="center", fontsize=10, color=INK)
+ax.set_yticks(yy); ax.set_yticklabels([e[0] for e in entries], fontsize=9)
+ax.set_xlabel("average error of the measured refraction (D)")
+ax.set_xlim(0, 1.1); ax.grid(axis="y", visible=False)
+ax.set_title("Fig. 4  Published deep-learning refraction results, for scale", loc="left")
+fig.text(0.01, 0.01, "Not like-for-like: ours is one model eye against its dial, with a network trained only on simulated "
+         "photos; the others are\nhuman eyes against clinical refraction, with networks trained on thousands of real "
+         "photos. Sources in README.md.", fontsize=8, color=INK2)
 fig.tight_layout(rect=(0, 0.08, 1, 1))
 fig.savefig(HERE / "fig4_literature.png", dpi=150)
 plt.close(fig)
 
 for m in metrics:
-    print(f"{m['block']:26s} {m['dist_cm']:.0f} cm  n {m['n']:2d}  MAE {m['mae']:.2f}  bias {m['bias']:+.2f}  "
-          f"<=0.5 {100 * m['within05']:.0f}%  slope {m['slope']:.2f}  | disc centre MAE {m['mae_disc']:.2f}")
-print(f"37 cm pooled MAE {ours37:.2f} D (n {n37}); 25-30 cm pooled {ours_near:.2f} D (n {n_near})")
-print("band edges 37 cm 7 mm:", {k: tuple(round(float(x), 2) for x in v) for k, v in EDGES.items()})
-
-# ---------------------------------------------------------------- fig 5: old vs new network
-NET2 = "checkpoints/v3_m_only/best.pt"
-cmp_blocks = list(BLOCKS) + ["C_37cm_nolens_7mm"]
-labels = {**{b: v[0].split()[0] + f" ({v[0].split()[1]} cm)" for b, v in BLOCKS.items()}, "C_37cm_nolens_7mm": "C (37 cm, no lens)"}
-stats = {}
-for b in cmp_blocks:
-    allr = list(csv.DictReader(open(ROOT / "model_eye/results" / b / "results.csv")))
-    for net in (NET, NET2):
-        u = [r for r in allr if r["network"] == net and r["crescent_seen"] == "True"]
-        d = arr(u, "dial_d"); e = arr(u, "net_eye_ir") - d
-        stats[(b, net)] = dict(mae=np.abs(e).mean(), bias=e.mean(), slope=np.polyfit(d, d + e, 1)[0], n=len(u))
-fig, axs = plt.subplots(1, 2, figsize=(12, 4.6))
-yy = np.arange(len(cmp_blocks))[::-1]
-for ax, key, xl in ((axs[0], "mae", "mean |network - dial| over crescent settings (D)"),
-                    (axs[1], "slope", "slope of network vs dial (ideal 1.00)")):
-    for i, b in zip(yy, cmp_blocks):
-        ax.plot([stats[(b, NET)][key], stats[(b, NET2)][key]], [i, i], color=GRID, lw=3, zorder=1)
-    ax.scatter([stats[(b, NET)][key] for b in cmp_blocks], yy, s=60, color=S2, edgecolors=SURF, lw=1.5, zorder=3,
-               label="old: wide_m_only (-12..+6 D, 25-100 cm)")
-    ax.scatter([stats[(b, NET2)][key] for b in cmp_blocks], yy, s=60, color=S1, edgecolors=SURF, lw=1.5, zorder=4,
-               label="new: v3_m_only (-16..+8 D, 20-100 cm, lens reflections)")
-    ax.set_yticks(yy); ax.set_yticklabels([labels[b] for b in cmp_blocks])
-    ax.set_xlabel(xl)
-axs[1].axvline(1.0, color=INK2, lw=0.8, ls="--")
-h, l = axs[0].get_legend_handles_labels()
-fig.legend(h, l, loc="lower center", ncol=2, fontsize=8, frameon=False)
-axs[0].set_xlim(0, None)
-axs[0].set_title("a  Error", loc="left"); axs[1].set_title("b  Slope", loc="left")
-fig.suptitle("Fig. 5  Retrained network: strong myopia (B) and close distances (E2, F2) now track with slope near 1;\n"
-             "the +4/+5 lens blocks at 37 cm got a 0.4 D bias. Neither network is better everywhere.",
-             x=0.01, ha="left", fontsize=10)
-fig.tight_layout(rect=(0, 0.07, 1, 0.9))
-fig.savefig(HERE / "fig5_retrained_network.png", dpi=150)
-plt.close(fig)
-with open(HERE / "data" / "network_comparison.csv", "w", newline="") as fh:
-    w = csv.writer(fh)
-    w.writerow(["block", "network", "n", "mae", "bias", "slope"])
-    for (b, net), v in stats.items():
-        w.writerow([b, net, v["n"], round(v["mae"], 3), round(v["bias"], 3), round(v["slope"], 3)])
+    print(f"{m['block']:26s} n {m['n']:2d}  error {m['mae']:.2f}  bias {m['bias']:+.2f}  within 0.5 {100 * m['within05']:.0f}%")
+print(f"A+D2+R {ours_good:.2f} D; all lens blocks {ours_all:.2f} D")

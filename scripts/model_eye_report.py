@@ -235,6 +235,9 @@ def main():
     ap.add_argument("--centre", choices=["reflex", "disc"], default="reflex",
                     help="reflex (default): pupil centre from where the crescents appear over the block; "
                          "disc: centre of the model eye's dark disc (off for the 5 mm hole)")
+    ap.add_argument("--ecc-mm", type=float, default=None,
+                    help="LED-to-lens distance given to the network instead of the one in meta.json "
+                         "(the blind-band edges of the model-eye photos fit 11.5 mm, not the nominal 10)")
     ap.add_argument("--lens-mag-mm", type=float, default=0.0,
                     help="trial lens to model-eye aperture distance (mm) for the lens's pupil magnification; "
                          "0 = ignore (default)")
@@ -332,7 +335,7 @@ def report(paths, out, args):
                 f.write_text(json.dumps(c, indent=2))
 
     margs = SimpleNamespace(hflip=args.hflip, vflip=args.vflip, brightness=args.brightness, reclick=reclick,
-                            focal_mm=4.74, pixel_um=1.4, refine=args.centre != "reflex")
+                            focal_mm=4.74, pixel_um=1.4, refine=args.centre != "reflex", ecc_mm=args.ecc_mm)
     rows = []
     for ck_path in args.checkpoints:
         model, cfg = load_net(ROOT / ck_path if not Path(ck_path).is_absolute() else ck_path)

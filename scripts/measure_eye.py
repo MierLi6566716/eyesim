@@ -249,7 +249,7 @@ def measure(session, model, cfg, args):
     import torch
 
     meta = json.loads((session / "meta.json").read_text())
-    d, ecc = meta["dist_mm"], meta["ecc_mm"]
+    d, ecc = meta["dist_mm"], (getattr(args, "ecc_mm", None) or meta["ecc_mm"])
     aperture = meta.get("aperture_mm") or cfg.get("aperture_mm", 2.6)
     white = meta.get("white_level", 1.0)
     frames = []
