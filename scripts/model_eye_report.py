@@ -121,14 +121,14 @@ def auto_centre(session, save=None):
     return float(cx), float(cy), float(r)
 
 
-def reflex_centre(sessions, seed_xy, r_px, save=None):
-    """Pupil centre from the reflex itself. Over a block the crescent moves
-    with the dial while glints, lens reflections and the model eye's dark disc
-    stay put, so (max - median) over the sessions keeps only light that came
-    back through the real aperture. The centre is where a disc of the set
-    pupil radius holds most of that light with little just outside it. On the
-    XSJ-501 the dark disc and glint are not centred on the aperture (5 mm hole
-    up to 15 px off at 37 cm), so this is what the analysis uses by default."""
+# Blocks photographed without moving the model eye: the aperture sits at the
+# same place in the full frame, so their reflexes are pooled to find it.
+PLACEMENTS = [("A_", "B_", "C_"), ("D1_", "D2_"), ("E1_", "E2_"), ("F1_", "F2_")]
+
+
+def _moving_reflex(sessions):
+    """(max - median) over a block's sessions, clipped reflections removed,
+    scaled to max 1, plus the crop's offset in the full frame."""
     from scipy.ndimage import binary_dilation, gaussian_filter
     stack, sat = [], None
     for s in sessions:
@@ -145,37 +145,78 @@ def reflex_centre(sessions, seed_xy, r_px, save=None):
     st = np.array(stack)
     var = gaussian_filter(st.max(0) - np.median(st, 0), 1.0)
     var[binary_dilation(sat, iterations=6)] = 0
+    return var / max(var.max(), 1e-12), (meta.get("crop_x0", 0), meta.get("crop_y0", 0))
+
+
+def reflex_centre(block_sessions, seed_full, r_px, save=None):
+    """
+    Pupil (aperture) centre from the reflex itself, in full-frame pixels.
+
+    Over a block the crescent moves with the dial while glints, lens
+    reflections and the model eye's dark disc stay put, so (max - median) over
+    the sessions keeps only light that came back through the real aperture.
+    The crescent's outer edge is the aperture edge: a circle of the set pupil
+    radius is fitted to that edge (half-maximum points), after a coarse search
+    for the disc that holds the most light. A block whose crescents are all on
+    one side (only myopic, or only hyperopic settings) lets the circle slide
+    toward that side, so blocks taken without moving the eye are pooled
+    (PLACEMENTS): the hyperopic block lights the far side of the aperture.
+
+    On the XSJ-501 the dark disc and the glint are not centred on the aperture
+    (up to ~3 mm for the 5 mm hole), and a 1 mm centring error moves the
+    reading by up to about 1 D, so this is the default.
+    """
+    from scipy.optimize import least_squares
+    parts = [_moving_reflex(ss) for ss in block_sessions]
+    X0, Y0 = min(o[0] for _, o in parts), min(o[1] for _, o in parts)
+    W = max(o[0] + v.shape[1] for v, o in parts) - X0
+    H = max(o[1] + v.shape[0] for v, o in parts) - Y0
+    var = np.zeros((H, W))
+    for v, (ox, oy) in parts:
+        sl = (slice(oy - Y0, oy - Y0 + v.shape[0]), slice(ox - X0, ox - X0 + v.shape[1]))
+        var[sl] = np.maximum(var[sl], v)
     yy, xx = np.indices(var.shape)
-    best = (-1.0, seed_xy[0], seed_xy[1])
+    sx, sy = seed_full[0] - X0, seed_full[1] - Y0
+    best = (-np.inf, sx, sy)
     for dy in np.arange(-16, 16.1, 1.0):
         for dx in np.arange(-16, 16.1, 1.0):
-            cx, cy = seed_xy[0] + dx, seed_xy[1] + dy
-            v = var[np.hypot(xx - cx, yy - cy) <= r_px].sum()
-            if v > best[0]:
-                best = (v, cx, cy)
-    fine = (-np.inf, best[1], best[2])
-    for dy in np.arange(-4, 4.01, 0.5):
-        for dx in np.arange(-4, 4.01, 0.5):
-            cx, cy = best[1] + dx, best[2] + dy
+            cx, cy = sx + dx, sy + dy
             d = np.hypot(xx - cx, yy - cy)
             v = var[d <= r_px].sum() - 3 * var[(d > r_px) & (d <= r_px + 3)].sum()
-            if v > fine[0]:
-                fine = (v, cx, cy)
+            if v > best[0]:
+                best = (v, cx, cy)
+    cx, cy, arc = best[1], best[2], None
+    for _ in range(3):
+        rs = np.arange(0.4 * r_px, 1.6 * r_px, 0.25)
+        pts = []
+        for a in np.linspace(0, 2 * np.pi, 180, endpoint=False):
+            xs, ys = cx + rs * np.cos(a), cy + rs * np.sin(a)
+            prof = var[np.clip(ys.astype(int), 0, H - 1), np.clip(xs.astype(int), 0, W - 1)]
+            pk = int(np.argmax(prof))
+            if prof[pk] < 0.25:
+                continue
+            out = np.nonzero(prof[pk:] < 0.5 * prof[pk])[0]
+            if len(out):
+                pts.append((xs[pk + out[0]], ys[pk + out[0]]))
+        if len(pts) < 20:
+            break
+        arc = np.array(pts)
+        cx, cy = least_squares(lambda c: np.hypot(arc[:, 0] - c[0], arc[:, 1] - c[1]) - r_px, [cx, cy],
+                               loss="soft_l1").x
     if save is not None:
         import matplotlib.pyplot as plt
-        h = int(3 * r_px)
-        x0, y0 = int(seed_xy[0]) - h, int(seed_xy[1]) - h
-        fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-        for a, img, t in ((ax[0], st.mean(0), "mean of the block"), (ax[1], var, "moving reflex (max - median)")):
-            w = img[max(y0, 0):y0 + 2 * h, max(x0, 0):x0 + 2 * h]
-            a.imshow(w, cmap="gray", vmax=np.percentile(w, 99.5) + 1e-9)
-            a.add_patch(plt.Circle((seed_xy[0] - max(x0, 0), seed_xy[1] - max(y0, 0)), r_px, fill=False, color="r", lw=0.8))
-            a.add_patch(plt.Circle((fine[1] - max(x0, 0), fine[2] - max(y0, 0)), r_px, fill=False, color="c", lw=0.8))
-            a.set_title(t, fontsize=8)
-        fig.suptitle(f"red: dark-disc centre   cyan: reflex centre ({fine[1] - seed_xy[0]:+.1f}, {fine[2] - seed_xy[1]:+.1f}) px",
-                     fontsize=8)
-        fig.savefig(save, dpi=100); plt.close(fig)
-    return float(fine[1]), float(fine[2])
+        h = int(2.2 * r_px)
+        fig, ax = plt.subplots(figsize=(4.5, 4.5))
+        ax.imshow(var, cmap="gray")
+        ax.add_patch(plt.Circle((sx, sy), r_px, fill=False, color="r", lw=0.8))
+        ax.add_patch(plt.Circle((cx, cy), r_px, fill=False, color="c", lw=1.0))
+        if arc is not None:
+            ax.plot(arc[:, 0], arc[:, 1], ".", color="y", ms=2)
+        ax.set_xlim(cx - h, cx + h); ax.set_ylim(cy + h, cy - h)
+        ax.set_title(f"moving reflex of {len(parts)} block(s); yellow: aperture edge\n"
+                     f"red: dark-disc centre  cyan: aperture ({cx - sx:+.1f}, {cy - sy:+.1f}) px", fontsize=8)
+        fig.tight_layout(); fig.savefig(save, dpi=100); plt.close(fig)
+    return float(cx + X0), float(cy + Y0)
 
 
 def main():
@@ -194,6 +235,9 @@ def main():
     ap.add_argument("--centre", choices=["reflex", "disc"], default="reflex",
                     help="reflex (default): pupil centre from where the crescents appear over the block; "
                          "disc: centre of the model eye's dark disc (off for the 5 mm hole)")
+    ap.add_argument("--lens-mag-mm", type=float, default=0.0,
+                    help="trial lens to model-eye aperture distance (mm) for the lens's pupil magnification; "
+                         "0 = ignore (default)")
     ap.add_argument("--hflip", action="store_true")
     ap.add_argument("--vflip", action="store_true")
     ap.add_argument("--brightness", choices=["glint", "none"], default="glint")
@@ -202,6 +246,30 @@ def main():
     out = ROOT / args.out if not Path(args.out).is_absolute() else Path(args.out)
     paths = [Path(s) for s in sorted(args.sessions)]
     blocks = [p for p in paths if not (p / "meta.json").exists() and any(p.glob("*/meta.json"))]
+    args.aperture = {}                      # block name -> aperture centre, full frame
+    if args.centre == "reflex" and not args.click and blocks:
+        groups = []
+        for b in blocks:
+            g = next((p for p in PLACEMENTS if b.name.startswith(p)), None)
+            same = [c for c in blocks if g and c.name.startswith(g)] or [b]
+            if same not in groups:
+                groups.append(same)
+        for g in groups:
+            ss = [sorted(s for s in b.glob("*/") if (s / "meta.json").exists()) for b in g]
+            if all((s / "clicks.json").exists() and json.loads((s / "clicks.json").read_text()).get("reflex")
+                   for x in ss for s in x) and not args.reclick:
+                continue
+            first = ss[0][0]
+            cx, cy, _ = auto_centre(first)
+            m0 = json.loads((first / "meta.json").read_text())
+            seed = (cx + m0.get("crop_x0", 0), cy + m0.get("crop_y0", 0))
+            ppm = m0["px_per_mm"] * m0.get("px_per_mm_dist_mm", m0["dist_mm"]) / m0["dist_mm"]
+            (out / g[0].name).mkdir(parents=True, exist_ok=True)
+            full = reflex_centre(ss, seed, m0["pupil_mm"] / 2 * ppm, save=out / g[0].name / "pupil_reflex.png")
+            print(f"aperture centre for {', '.join(b.name for b in g)}: full frame ({full[0]:.1f}, {full[1]:.1f}), "
+                  f"{full[0] - seed[0]:+.1f} {full[1] - seed[1]:+.1f} px from the dark disc")
+            for b in g:
+                args.aperture[b.name] = full
     if not blocks:
         report(paths, out, args)
         return
@@ -226,17 +294,15 @@ def report(paths, out, args):
     out.mkdir(parents=True, exist_ok=True)
 
     first = sessions[0]
-    if args.centre == "reflex" and not args.click and len(sessions) >= 4:
-        if reclick or not all((s / "clicks.json").exists() for s in sessions) or \
-                not json.loads((first / "clicks.json").read_text()).get("reflex"):
-            cx, cy, _ = auto_centre(first, save=out / "pupil_fit.png")
-            m0 = json.loads((first / "meta.json").read_text())
-            ppm = m0["px_per_mm"] * m0.get("px_per_mm_dist_mm", m0["dist_mm"]) / m0["dist_mm"]
-            rx, ry = reflex_centre(sessions, (cx, cy), m0["pupil_mm"] / 2 * ppm, save=out / "pupil_reflex.png")
-            print(f"pupil centre from the reflex: ({rx:.1f}, {ry:.1f}), {rx - cx:+.1f} {ry - cy:+.1f} px from the dark disc")
-            for s in sessions:
-                (s / "clicks.json").write_text(json.dumps({"pupil_xy_r": [rx, ry, m0["pupil_mm"] / 2 * ppm],
-                                                           "auto": True, "reflex": True}, indent=2))
+    block = first.parent.name
+    if block in getattr(args, "aperture", {}):
+        fx, fy = args.aperture[block]
+        for s in sessions:
+            m = json.loads((s / "meta.json").read_text())
+            ppm = m["px_per_mm"] * m.get("px_per_mm_dist_mm", m["dist_mm"]) / m["dist_mm"]
+            (s / "clicks.json").write_text(json.dumps({"pupil_xy_r": [fx - m.get("crop_x0", 0), fy - m.get("crop_y0", 0),
+                                                                      m["pupil_mm"] / 2 * ppm],
+                                                       "auto": True, "reflex": True}, indent=2))
         reclick = False
     if not args.click and (reclick or not (first / "clicks.json").exists()):
         cx, cy, r = auto_centre(first, save=out / "pupil_fit.png")
@@ -260,7 +326,9 @@ def report(paths, out, args):
                 c = json.loads(f.read_text())
                 ppm = m["px_per_mm"] * m.get("px_per_mm_dist_mm", m["dist_mm"]) / m["dist_mm"]
                 c.setdefault("r_seen_px", c["pupil_xy_r"][2])
-                c["pupil_xy_r"][2] = m["pupil_mm"] / 2 * ppm
+                # A trial lens h mm in front of the aperture magnifies the pupil the camera sees.
+                mag = 1.0 / (1.0 - args.lens_mag_mm * 1e-3 * m.get("lens_d", 0.0))
+                c["pupil_xy_r"][2] = m["pupil_mm"] / 2 * ppm * mag
                 f.write_text(json.dumps(c, indent=2))
 
     margs = SimpleNamespace(hflip=args.hflip, vflip=args.vflip, brightness=args.brightness, reclick=reclick,

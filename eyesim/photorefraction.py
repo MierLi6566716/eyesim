@@ -118,6 +118,10 @@ class Scene:
     shot_noise: float = 0.01
     bits: int = 8
     ambient: float = 0.0             # stray light added to every pixel
+    # Reflections off a trial lens or the eye's own front surfaces: bright,
+    # often clipped blobs at fixed places, the same in both LED frames
+    # (x, y in pupil radii, sigma in px, amplitude).
+    reflections: tuple = ()
 
 
 # Fraction of the entrance pupil collected at the peak of a bright crescent
@@ -299,6 +303,10 @@ def render_pair(eye: Eye, geom: Geometry = Geometry(), scene: Scene = Scene(),
                     d2 = ((xy[..., 0] - px) ** 2 + (xy[..., 1] - py) ** 2) * (px_per_r / R) ** 2
                     img = img + amp * np.exp(-d2 / (2.0 * sig ** 2))
 
+        for rx, ry, rs, ra in scene.reflections:
+            d2 = ((xy[..., 0] - rx * R) ** 2 + (xy[..., 1] - ry * R) ** 2) * (px_per_r / R) ** 2
+            img = img + ra * np.exp(-d2 / (2.0 * rs ** 2))
+
         if scene.tear_amp > 0.0:
             img = img * ripple
         if lash is not None:
@@ -370,7 +378,7 @@ def sample_eye(rng: np.random.Generator, m_range=M_RANGE_D) -> Eye:
 
 # Rig ranges the network is trained on. Distance is drawn evenly in 1/d,
 # because the optics scale with 1/d (the blind band sits at -1000/d D).
-D_RANGE_MM = (250.0, 1000.0)
+D_RANGE_MM = (200.0, 1000.0)
 ECC_RANGE_MM = (6.0, 20.0)
 APERTURE_RANGE_MM = (1.5, 4.5)       # lens opening diameter = focal length / f-number
 
@@ -412,6 +420,10 @@ def sample_scene(rng: np.random.Generator, image_size: int = 64) -> Scene:
         read_noise=float(rng.uniform(0.004, 0.03)),
         shot_noise=float(rng.uniform(0.005, 0.04)),
         ambient=float(rng.exponential(0.02)),
+        # Trial-lens / front-surface reflections (model-eye photos, Nov 2026).
+        reflections=tuple((float(rng.uniform(-1.3, 1.3)), float(rng.uniform(-1.3, 1.3)),
+                           float(rng.uniform(1.0, 4.0)), float(rng.uniform(0.5, 4.0)))
+                          for _ in range(int(rng.integers(1, 3)) if rng.random() < 0.35 else 0)),
     )
 
 
