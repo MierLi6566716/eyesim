@@ -396,9 +396,10 @@ def sample_geometry(rng: np.random.Generator, d_range=D_RANGE_MM, ecc_range=ECC_
 
 def sample_scene(rng: np.random.Generator, image_size: int = 64) -> Scene:
     """Framing, everything around the pupil, and the sensor."""
+    fill = float(rng.uniform(0.5, 0.95))
     return Scene(
         image_size=image_size,
-        fill=float(rng.uniform(0.5, 0.95)),
+        fill=fill,
         centre_frac=(float(rng.normal(0, 0.08)), float(rng.normal(0, 0.08))),
         exposure=float(np.exp(rng.uniform(np.log(0.25), np.log(4.0)))),   # > 1 clips bright crescents
         # Light scattered many times in the eye: a uniform glow with no
@@ -416,6 +417,8 @@ def sample_scene(rng: np.random.Generator, image_size: int = 64) -> Scene:
         lid_frac=float(rng.uniform(0.05, 0.3)) if rng.random() < 0.25 else 0.0,
         lashes=int(rng.integers(2, 10)) if rng.random() < 0.3 else 0,
         tear_amp=float(rng.uniform(0.1, 0.5)) if rng.random() < 0.15 else 0.0,
+        # Tried 12 Nov 2026: blur up to 0.22 of the pupil radius (the model-eye photos fit ~0.15).
+        # Networks trained that way read the real photos 1.2-1.4 D too weak, so reverted.
         blur_px=float(rng.uniform(0.3, 1.8)),
         read_noise=float(rng.uniform(0.004, 0.03)),
         shot_noise=float(rng.uniform(0.005, 0.04)),
