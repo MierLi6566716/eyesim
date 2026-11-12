@@ -20,6 +20,8 @@ filter (run --check to find out).
   python3 eye_capture.py --eye right --lens +3           # +3.00 D trial lens in front of the eye
   python3 eye_capture.py --eye right --lens -2 --cyl -1 --axis 90
   python3 eye_capture.py --eye model --true-rx -3 --pupil-mm 6 --shots 10   # model eye, dial at -3 D
+  python3 eye_capture.py --video 60 --eye left --gain 10 --exposure-us 8000         # 60 s, ~7 H/V pairs per second
+  python3 eye_capture.py --video 60 --eye left --gain 12 --exposure-us 6000 --fast  # ~15 pairs/s, coarser pixels
 
 Your rig's measurements go in rig.json next to this script (see README):
   {"ecc_h_mm": 10.0, "ecc_v_mm": 10.0, "aperture_mm": 2.6, "dist_cm": 37,
@@ -185,6 +187,146 @@ def focus_loop(cam):
         print("\rsharpness %8.4f  best %8.4f  %-50s" % (s, best, "#" * int(50 * s / best)), end="", flush=True)
 
 
+
+# ------------------------------------------------------------------ video mode
+def clean_frames(frames, switches, readout_ns, margin_ns=1_000_000):
+    """
+    Which frames saw only one LED state. frames: list of (sensor_ts_ns, exposure_ns);
+    switches: list of (time_ns, state) in time order, state in {"H", "V", None}.
+    With a rolling shutter a frame collects light from its first row's start
+    (sensor_ts) to its last row's end (sensor_ts + readout + exposure). A frame
+    is clean if no LED switch falls inside that window (+- margin); its label is
+    the state in force. Returns a list of state or "mixed" per frame.
+    """
+    out = []
+    times = [t for t, _ in switches]
+    for ts, exp in frames:
+        start, end = ts - margin_ns, ts + readout_ns + exp + margin_ns
+        i = np.searchsorted(times, start, side="right") - 1          # last switch before the window
+        if i < 0 or (i + 1 < len(times) and times[i + 1] <= end):
+            out.append("mixed")
+        else:
+            out.append(switches[i][1])
+    return out
+
+
+def record_video(args, rig, dist_cm):
+    """
+    Continuous H, V, H, V ... frames (a dark frame every DARK_EVERY pairs) for
+    args.video seconds, using the sensor's 2x2-binned 2304x1296 mode, so the
+    pixel scale is the same as the still sessions. Each LED state is held until
+    one clean frame arrives (no LED switch during its exposure, from the frame
+    timestamps), then the next state is switched on. Only a ROI x ROI box around
+    the eye is kept, written to a memory-mapped file as it comes in.
+
+    UNTESTED ON THE PI (written 12 Nov 2026 with the Pi offline). Check the
+    printed rate and the "clean" share on the first run.
+    """
+    from picamera2 import Picamera2
+    ROI, DARK_EVERY = 384, 8
+    cam = Picamera2()
+    # Default: the 2304x1296 binned mode (same pixel scale as the stills, max ~56 fps -> ~7 H/V pairs/s).
+    # --fast: the 1536x864 mode (max ~120 fps -> ~15 pairs/s) at 2/3 of the pixel scale.
+    want = 1536 if args.fast else 2304
+    mode = min((m for m in cam.sensor_modes if m["size"][0] >= want), key=lambda m: m["size"][0])
+    size = mode["size"]
+    bits = int(re.search(r"(\d+)", str(mode["format"]).split("_")[0]).group(1))
+    frame_us = int(max(args.exposure_us + 2500, 1e6 / mode["fps"] + 50))   # the mode's max rate caps it
+    cfg = cam.create_video_configuration(raw={"size": size, "format": str(mode["format"]).replace("_CSI2P", "")},
+                                         buffer_count=6, controls={"FrameDurationLimits": (frame_us, frame_us)})
+    cam.configure(cfg)
+    controls = {"AeEnable": False, "AwbEnable": False, "ExposureTime": int(args.exposure_us),
+                "AnalogueGain": float(args.gain), "ColourGains": (1.0, 1.0)}
+    if "LensPosition" in cam.camera_controls:
+        controls.update({"AfMode": 0, "LensPosition": 100.0 / dist_cm})
+    cam.set_controls(controls)
+    cam.start()
+    time.sleep(1.0)
+    readout_ns = int(frame_us * 1000 * 0.9)          # rolling-shutter readout ~ frame time (conservative)
+
+    def grab():
+        req = cam.capture_request()
+        try:
+            a = req.make_array("raw")
+            md = req.get_metadata()
+        finally:
+            req.release()
+        if a.dtype == np.uint8:
+            a = a.view(np.uint16)
+        a = a[:, :size[0]]
+        if a.max() >= 2 ** bits:
+            a = a >> (16 - bits)
+        return a, int(md["SensorTimestamp"]), int(md["ExposureTime"]) * 1000
+
+    leds = Leds()
+    switches = []
+    def switch(state):
+        leds.set(state)
+        switches.append((time.clock_gettime_ns(time.CLOCK_BOOTTIME), state))
+
+    # Find the eye once (H minus dark), then keep a fixed box around it.
+    switch(None); [grab() for _ in range(3)]; dark0 = grab()[0].astype(np.int32)
+    switch("H"); [grab() for _ in range(3)]; h0 = grab()[0].astype(np.int32)
+    cx, cy, _ = bright_spot(np.clip(h0 - dark0, 0, None))
+    H, W = h0.shape
+    x0, y0 = int(np.clip(cx - ROI // 2, 0, W - ROI)), int(np.clip(cy - ROI // 2, 0, H - ROI))
+
+    name = time.strftime("%Y%m%d-%H%M%S-") + "video-%s-%dcm-S%+g" % (args.eye, round(dist_cm), args.lens)
+    folder = Path(args.out) / name
+    folder.mkdir(parents=True)
+    n_max = int(args.video * 1e9 / (frame_us * 1000)) + 10
+    store = np.lib.format.open_memmap(folder / "frames.npy", mode="w+", dtype=np.uint16, shape=(n_max, ROI, ROI))
+    rows, k, n_pairs = [], 0, 0
+    order = ["H", "V"]
+    state_i, state = 0, "H"
+    print("Recording %.0f s. Look at the target you were told to; blink normally." % args.video)
+    t_end = time.time() + args.video
+    switch(state)
+    while time.time() < t_end and k < n_max:
+        a, ts, exp = grab()
+        lab = clean_frames([(ts, exp)], switches, readout_ns)[0]
+        store[k] = a[y0:y0 + ROI, x0:x0 + ROI]
+        rows.append((k, ts, exp, lab))
+        k += 1
+        if lab == state:                               # got a clean frame of this state: move on
+            if state == "V":
+                n_pairs += 1
+            if state is None:
+                state = "H"
+            elif state == "V" and n_pairs % DARK_EVERY == 0:
+                state = None
+            else:
+                state_i = 1 - state_i if state is not None else 0
+                state = order[state_i]
+            switch(state)
+    leds.close()
+    cam.stop(); cam.close()
+    store.flush()
+    took = (rows[-1][1] - rows[0][1]) / 1e9 if len(rows) > 1 else 0
+    labels = [r[3] for r in rows]
+    with open(folder / "frames.csv", "w") as fh:
+        fh.write("frame,sensor_ts_ns,exposure_ns,led\n")
+        for r in rows:
+            fh.write("%d,%d,%d,%s\n" % (r[0], r[1], r[2], {None: "dark"}.get(r[3], r[3])))
+    with open(folder / "switches.csv", "w") as fh:
+        fh.write("time_ns,led\n")
+        for t, st in switches:
+            fh.write("%d,%s\n" % (t, st or "dark"))
+    (folder / "meta.json").write_text(json.dumps({
+        "kind": "video", "eye": args.eye, "dist_mm": 10.0 * dist_cm,
+        "ecc_h_mm": rig["ecc_h_mm"], "ecc_v_mm": rig["ecc_v_mm"], "ecc_mm": 0.5 * (rig["ecc_h_mm"] + rig["ecc_v_mm"]),
+        "aperture_mm": rig["aperture_mm"],
+        "px_per_mm": rig.get("px_per_mm") and rig["px_per_mm"] * size[0] / 2304.0,   # stills are 2304 wide
+        "px_per_mm_dist_mm": rig.get("px_per_mm_dist_mm"), "lens_d": args.lens, "vertex_mm": args.vertex_mm,
+        "exposure_us": args.exposure_us, "gain": args.gain, "frame_us": frame_us, "frames": k,
+        "roi_x0": x0, "roi_y0": y0, "roi": ROI, "sensor_mode": list(size), "bits": bits,
+        "white_level": 2 ** bits - 1, "bayer_raw": True, "note": args.note,
+        "taken": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2))
+    n_h, n_v = labels.count("H"), labels.count("V")
+    print("saved %s: %d frames in %.1f s (%.1f fps); clean H %d, V %d, dark %d, mixed %d -> %.1f H/V pairs per second"
+          % (folder, k, took, k / max(took, 1e-9), n_h, n_v, labels.count(None), labels.count("mixed"),
+             min(n_h, n_v) / max(took, 1e-9)))
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--eye", choices=["right", "left", "model"], default="right")
@@ -205,10 +347,18 @@ def main():
     mode.add_argument("--aim", action="store_true")
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--scale", action="store_true")
+    mode.add_argument("--video", type=float, metavar="SECONDS", default=None,
+                      help="record H/V pairs continuously for SECONDS (see record_video)")
+    ap.add_argument("--fast", action="store_true", help="with --video: 1536x864 sensor mode, ~2x the pair rate")
     args = ap.parse_args()
 
     rig = json.loads(RIG.read_text()) if RIG.exists() else {}
     session = not (args.focus or args.check or args.scale or args.aim)
+    if args.video:
+        if not {"ecc_h_mm", "ecc_v_mm", "aperture_mm", "dist_cm"} <= rig.keys():
+            raise SystemExit("rig.json needs ecc_h_mm, ecc_v_mm, aperture_mm and dist_cm (README, Pi step 4)")
+        record_video(args, rig, args.dist or rig.get("dist_cm", 37.0))
+        return
     if session and not {"ecc_h_mm", "ecc_v_mm", "aperture_mm", "dist_cm"} <= rig.keys():
         raise SystemExit("rig.json needs ecc_h_mm, ecc_v_mm, aperture_mm and dist_cm (README, Pi step 4)")
     dist_cm = args.dist or rig.get("dist_cm", 37.0)
