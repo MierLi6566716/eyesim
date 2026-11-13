@@ -4,11 +4,11 @@ import {
 } from "../components/Article";
 
 const TOC: TocEntry[] = [
-  { id: "problem", num: "6.1", title: "The problem: the eye fights back" },
-  { id: "game", num: "6.2", title: "The environment: half real, half simulated" },
-  { id: "training", num: "6.3", title: "Training, including the failures" },
-  { id: "results", num: "6.4", title: "Results against hand-written rules" },
-  { id: "honest", num: "6.5", title: "What this does and does not show" },
+  { id: "problem", num: "6.1", title: "Accommodation during measurement" },
+  { id: "environment", num: "6.2", title: "Simulation environment" },
+  { id: "training", num: "6.3", title: "Training" },
+  { id: "results", num: "6.4", title: "Results" },
+  { id: "scope", num: "6.5", title: "Scope and open questions" },
 ];
 
 export function Control() {
@@ -16,139 +16,128 @@ export function Control() {
     <>
       <PageHeader
         kicker="6 · Control"
-        title="Reinforcement learning against an eye that refocuses"
+        title="Learned lens control for an eye that changes focus"
         lede={
           <>
-            The wearer's eye is a second controller acting on the same lens as the device. A learned
-            policy that chooses lens powers over time beats the best rule we could write by hand &mdash;
-            in simulation, by cutting large misses by a third. This page explains the problem, the agent,
-            the four attempts it took, and exactly what remains unproven.
+            During a measurement the eye may change its own focus, and a device that adjusts its lens
+            from the measured value can converge on the wrong prescription. A policy trained with
+            reinforcement learning to choose lens powers over time reduced the mean error from 0.55 D,
+            for the best hand-designed procedure, to 0.46 D on simulated eyes.
           </>
         }
       />
       <Article toc={TOC}>
-        <Section id="problem" num="6.1" title="The problem: the eye fights back">
+        <Section id="problem" num="6.1" title="Accommodation during measurement">
           <p>
-            A young eye can add focusing power at will (accommodation). During a measurement it may focus
-            without meaning to, so it reads more myopic than it is: in 3,450 children measured without
-            cycloplegic drops, readings averaged 0.92 D too myopic (Gu et&nbsp;al. 2022). Clinics counter
-            with <em>fogging</em> &mdash; extra plus power that blurs the view until the eye gives up and
-            relaxes &mdash; but the right amount and timing differ per person, and in children even
-            20&nbsp;minutes of +2 D fog relaxes less than drops (Hopkins et&nbsp;al. 2012).
+            A young eye adds focusing power involuntarily (accommodation), which makes it measure more
+            myopic than it is. In 3,450 children measured without cycloplegic drops the readings were on
+            average 0.92 D too myopic (Gu et al., 2022). The clinical countermeasure is fogging, a plus
+            lens that blurs the target until accommodation relaxes, but the effective amount and duration
+            vary between individuals; in children, 20 minutes of +2 D fogging relaxed accommodation less
+            than drops (Hopkins et al., 2012).
           </p>
           <p>
-            For a self-setting lens this is worse than noise. If the lens is slightly too minus, the eye
-            focuses through it and the image looks fine, so a naive null-seeking loop happily converges on
-            an over-minused prescription &mdash; the classic mistake glasses shops avoid by training, and
-            devices avoid by protocol. On our bench geometry there is a second twist: the clinically mild
-            fog lands the eye inside the photorefraction blind band, where the camera reads nothing at
-            all. Every lens that yields a reading also disturbs the eye.
+            For a self-adjusting lens the effect is systematic rather than random. If the lens is slightly
+            too negative, the eye compensates by accommodating, the image appears focused, and a
+            null-seeking controller settles on an over-minus correction. On the 37 cm bench there is an
+            additional constraint: mild fogging places the eye inside the photorefraction blind band,
+            where no reading is available, so every lens power that produces a reading also disturbs
+            the eye.
           </p>
         </Section>
 
-        <Section id="game" num="6.2" title="The environment: half real, half simulated">
-          <p>The agent plays a 30-frames-per-second game, at most 10 seconds long:</p>
+        <Section id="environment" num="6.2" title="Simulation environment">
+          <p>One episode is a measurement of up to 10 seconds, simulated at 30 frames per second.</p>
           <ul>
             <li>
-              <strong>The patient is simulated</strong>, with every parameter drawn per person from
-              published ranges: 0.25&ndash;0.45 s reaction delay, faster focusing than relaxing, full
-              relaxation under mild fog, drift to a 0.25&ndash;1.75 D resting focus under heavy fog,
-              instrument myopia that fades only while fogged, depth of focus, microfluctuations.
+              <strong>Eye.</strong> Each simulated person has parameters drawn from published ranges:
+              a response latency of 0.25 to 0.45 s, faster accommodation than relaxation, full relaxation
+              under mild fogging, drift to a resting focus of 0.25 to 1.75 D under strong fogging,
+              instrument myopia that decays only while fogged, depth of focus, and microfluctuations.
             </li>
             <li>
-              <strong>The sensor is real.</strong> Every reading is sampled from what our network actually
-              reported on the model-eye photographs at that refraction: the measured blind band
-              (&minus;5.8&hellip;+2.3 D), the measured per-setting bias, the measured 0.10 D frame noise.
-              No invented camera.
+              <strong>Sensor.</strong> Readings are drawn from the network's measured output on the
+              model-eye photographs at the corresponding refraction: the measured blind band (&minus;5.8
+              to +2.3 D), the measured bias at each refraction, and the measured frame-to-frame noise of
+              0.10 D.
             </li>
             <li>
-              <strong>Actions:</strong> change the lens by &minus;3, &minus;1, &minus;0.25, 0, +0.25, +1 or
-              +3 D, or stop and report. <strong>Score:</strong> minus the final error, minus a tiny cost
-              per frame.
+              <strong>Actions.</strong> Change the lens by &minus;3, &minus;1, &minus;0.25, 0, +0.25, +1 or
+              +3 D, or end the measurement. The reward is the negative final error, with a small cost per
+              frame.
             </li>
             <li>
-              <strong>No cheating:</strong> the reported answer is always the median of the last six
-              readings plus the lens. The agent cannot learn to guess; it can only choose where to look,
-              for how long, and when to stop.
+              <strong>Reported value.</strong> The result is always the median of the last six readings
+              plus the lens power. The policy controls where and for how long the eye is observed, not
+              the value reported.
             </li>
           </ul>
         </Section>
 
-        <Section id="training" num="6.3" title="Training, including the failures">
-          <p>PPO, a 2&times;256 network, observations = half a second of history plus a small memory. It took four attempts, each one a lesson:</p>
+        <Section id="training" num="6.3" title="Training">
+          <p>
+            The policy is a two-layer network of 256 units trained with proximal policy optimisation
+            (PPO). It observes the last half-second of readings and a short summary of earlier ones.
+          </p>
           <ol>
-            <li><strong>From scratch:</strong> stuck at ~3 D. Rewards arrive only at the end, and random lens moves almost never find a reading &mdash; nothing to learn from.</li>
-            <li><strong>Imitate a simple rule first, then improve:</strong> got <em>worse</em>. Our per-frame time penalty was too big, so the agent shortened the fogging that made the rule work.</li>
-            <li><strong>Smaller time cost, value warm-up, a pull toward the imitated rule, honest held-out checks:</strong> beat the simple rule (0.84 &rarr; ~0.65 D) but not a stronger one.</li>
-            <li><strong>Imitate the strongest hand rule (fog, flash, re-estimate, fog again), then improve:</strong> the agent below.</li>
+            <li><strong>Training from random initialisation</strong> did not converge (error about 3 D): the reward arrives only at the end of an episode, and random lens changes rarely produce a reading.</li>
+            <li><strong>Imitation of a simple rule followed by PPO</strong> degraded performance, because the per-frame cost was large enough to shorten the fogging phase on which the rule depends.</li>
+            <li><strong>A reduced time cost, value-function warm-up and a penalty for diverging from the imitated rule</strong> improved on the simple rule (0.84 to about 0.65 D) but not on the stronger one.</li>
+            <li><strong>Imitation of the strongest rule</strong> (fog, observe, re-estimate, fog again, observe), followed by PPO, produced the policy reported below.</li>
           </ol>
-          <Note label="Method note.">
-            <p>
-              The baselines are not strawmen. We wrote the best rules we could &mdash; the two-cycle
-              fog-and-flash rule was designed with full knowledge of the simulated eye &mdash; and the agent
-              is scored greedily on held-out eyes, with the best checkpoint chosen on a separate validation
-              set, never on the test eyes.
-            </p>
-          </Note>
+          <p>
+            The best policy was selected on a separate validation set of simulated eyes and evaluated
+            once on 2,000 test eyes. The hand-designed rules were written with full knowledge of the
+            simulated eye.
+          </p>
         </Section>
 
-        <Section id="results" num="6.4" title="Results against hand-written rules">
+        <Section id="results" num="6.4" title="Results">
           <div className={a.tableWrap}>
             <table className={a.table}>
-              <thead><tr><th>Policy (2,000 unseen simulated eyes)</th><th>Mean |error|</th><th>Misses &gt; 1 D</th><th>No answer</th><th>Time</th></tr></thead>
+              <thead><tr><th>Procedure (2,000 simulated eyes)</th><th>Mean absolute error</th><th>Errors above 1 D</th><th>No result</th><th>Duration</th></tr></thead>
               <tbody>
-                <tr><td>One shot: find a reading, report</td><td>1.53 D</td><td>&mdash;</td><td>3%</td><td>0.3 s</td></tr>
-                <tr><td>Null-seeking loop (the naive device)</td><td>1.41 D</td><td>&mdash;</td><td>0%</td><td>0.4 s</td></tr>
-                <tr><td>Fog, then flash (hand rule)</td><td>0.84 D</td><td>31%</td><td>1.9%</td><td>3.5 s</td></tr>
-                <tr><td>Fog&ndash;flash twice (best hand rule)</td><td>0.55 D</td><td>16%</td><td>1.7%</td><td>5.4 s</td></tr>
-                <tr><td><strong>Learned policy (PPO)</strong></td><td><strong>0.46 D</strong></td><td><strong>11%</strong></td><td><strong>0.8%</strong></td><td>5.8 s</td></tr>
-                <tr><td>Floor: eye fully relaxed, same sensor</td><td>0.34 D</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+                <tr><td>Single reading at the first usable lens</td><td>1.53 D</td><td>&ndash;</td><td>3%</td><td>0.3 s</td></tr>
+                <tr><td>Null-seeking loop</td><td>1.41 D</td><td>&ndash;</td><td>0%</td><td>0.4 s</td></tr>
+                <tr><td>Fog, then observe</td><td>0.84 D</td><td>31%</td><td>1.9%</td><td>3.5 s</td></tr>
+                <tr><td>Fog and observe twice</td><td>0.55 D</td><td>16%</td><td>1.7%</td><td>5.4 s</td></tr>
+                <tr><td><strong>Learned policy</strong></td><td><strong>0.46 D</strong></td><td><strong>11%</strong></td><td><strong>0.8%</strong></td><td>5.8 s</td></tr>
+                <tr><td>Lower bound: fully relaxed eye, same sensor</td><td>0.34 D</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
               </tbody>
             </table>
           </div>
           <StatRow>
-            <Stat value="−0.10" unit="D" label="agent vs best rule, same eyes (95% CI −0.13 to −0.07)" />
-            <Stat value="16% → 11%" label="misses larger than 1 D" />
-            <Stat value="−0.06" unit="D" label="advantage on the 1,961 eyes where both answered — part of the gain is simply failing less often" />
+            <Stat value="−0.10" unit="D" label="paired difference from the best rule (95% CI −0.13 to −0.07)" />
+            <Stat value="16% to 11%" label="share of errors above 1 D" />
+            <Stat value="−0.06" unit="D" label="difference on the 1,961 eyes for which both procedures returned a result" />
           </StatRow>
           <p>
-            The agent's edge is reliability, not sharper typical readings: it nearly halves the
-            no-answer rate and cuts the worst misses, while the median eye is unchanged. It closes about
-            half the gap between the best rule and the physical floor.
+            The improvement comes mainly from fewer failures: the policy halves the rate of measurements
+            without a result and reduces large errors, while the median error is unchanged. It closes
+            about half of the gap between the best rule and the lower bound.
           </p>
         </Section>
 
-        <Section id="honest" num="6.5" title="What this does and does not show">
+        <Section id="scope" num="6.5" title="Scope and open questions">
           <p>
-            A fair objection: focusing behaviour depends on lighting, age, the person, the prescription
-            &mdash; no simulator captures it perfectly, so what is the agent worth? Three answers:
+            Accommodation depends on the individual, age, illumination and refractive state, and no
+            simulated population reproduces it exactly. The policy does not predict the eye; it reacts to
+            measurements at 30 Hz, so it requires the training population to span the behaviour of real
+            eyes rather than to match any one of them. On simulated eyes drawn outside the training
+            ranges, all procedures degrade to errors of about 1.8 D, the learned policy among them.
           </p>
-          <ul>
-            <li>
-              <strong>The policy does not need a perfect patient model</strong>, because it never predicts
-              the eye open-loop: it reacts to readings, thirty times a second. It needs the <em>family</em>{" "}
-              of behaviours in training to cover the person in front of it. That is why every parameter is
-              randomized per episode. On eyes drawn <em>outside</em> the training ranges, every policy
-              degrades (~1.8 D) &mdash; the agent stays ahead of the rules, but nothing rescues an eye that
-              relaxes slower than the session lasts.
-            </li>
-            <li>
-              <strong>The design can remove most of the problem physically.</strong> The{" "}
-              <Link to="/prototype">clip-on module</Link> covers the measured eye, so the swept lens no
-              longer changes what any eye is trying to focus on; the agent's job then moves to the fellow
-              eye's fog. RL is the insurance for the part of the problem the optics cannot delete.
-            </li>
-            <li>
-              <strong>The deciding unknown is measured, not argued.</strong> Everything hinges on how fast
-              a real eye relaxes under fog &mdash; seconds or minutes. Our camera's new video mode (about 13
-              reading pairs per second end-to-end in a synthetic test) exists to measure exactly that trace
-              on a real eye; the simulated patient then gets fitted to data instead of literature ranges.
-            </li>
-          </ul>
+          <p>
+            Two developments narrow the problem. The <Link to="/prototype">clip-on design</Link> covers the
+            measured eye; because accommodation is consensual, its focus then follows the uncovered eye,
+            and the lens sweep no longer changes the accommodative stimulus. The remaining control task is
+            the fogging of the uncovered eye. Second, the camera now has a video mode intended to record
+            the time course of accommodation in a real eye, so that the simulated population can be
+            fitted to measurements.
+          </p>
           <Note label="Status.">
             <p>
-              The agent's gain is demonstrated in simulation only. We treat it as a hypothesis with a
-              measurement plan, not a result about human eyes.
+              The improvement is demonstrated in simulation only. Its relevance to human eyes depends on
+              how quickly real eyes relax under fogging, which has not yet been measured with this device.
             </p>
           </Note>
         </Section>

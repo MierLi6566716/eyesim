@@ -21,7 +21,7 @@ from eyesim.predistort import wiener_deconvolve
 _DEMO_SIZE = 160
 
 # calibrated_psf_for_image sizes the kernel against a real geometric blur
-# angle under an assumed field of view (default 25 deg — a photo viewed on
+# angle under an assumed field of view (see that function for the field-of-view assumption; formerly 25 deg, a photo viewed on
 # a phone/laptop at arm's length) instead of an arbitrary pixel fraction.
 # This used to be reimplemented here as a private _psf_for_image; it's now
 # shared with eyesim.pipeline and the example scripts, all of which had the
@@ -53,11 +53,14 @@ def png_data_url(arr: np.ndarray) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def psf_bench(S: float, C: float, axis: float, pupil_r_mm: float = 2.0) -> dict:
+def psf_bench(S: float, C: float, axis: float, pupil_r_mm: float = 1.5) -> dict:
     """Live-slider bench: PSF heatmap + blurred demo-scene preview + sharpness,
     with the kernel scaled against the demo scene (see
     eyesim.optics.calibrated_psf_for_image)."""
-    psf = calibrated_psf_for_image(S, C, axis, _SCENE.shape, pupil_radius_mm=pupil_r_mm)
+    # The demo star is a small test target, not a photo of a scene: treat its
+    # 160 px as 8 deg of view (3 arcmin per pixel), so blur stays visible.
+    psf = calibrated_psf_for_image(S, C, axis, _SCENE.shape, pupil_radius_mm=pupil_r_mm,
+                                   assumed_fov_deg=8.0)
     blurred = blur_image(_SCENE, psf)
     psf_norm = psf / psf.max()
     return {
@@ -89,7 +92,7 @@ def _downsample_kernel(psf: np.ndarray, max_size: int) -> np.ndarray:
 
 
 def simulate_case(image: np.ndarray, S: float, C: float, axis: float,
-                  pupil_r_mm: float = 2.0) -> dict:
+                  pupil_r_mm: float = 1.5) -> dict:
     """
     Simulate-mode physics for one uploaded photo: the eye's blur, the
     Wiener-predistorted "corrected" version, and a small kernel for the

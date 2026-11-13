@@ -5,18 +5,18 @@ const READY_TIMEOUT_MS = 7000;
 
 /**
  * The honest version of "crop the pupil region": no face/eye detection
- * model runs here (see proposal/ — Diagnose mode's preprocessing is
+ * model runs here (see proposal/; Diagnose mode's preprocessing is
  * documented as a known simplification). This overlays a static alignment
  * guide over the live camera feed so the user frames their own eye, then
  * captures a single centered square frame.
  *
  * The <video> element is ALWAYS mounted (never conditionally rendered) so
- * `videoRef.current` is available the instant we get a MediaStream — an
+ * `videoRef.current` is available the instant we get a MediaStream; an
  * earlier version set `srcObject` from a requestAnimationFrame callback to
  * dodge a "ref not mounted yet" race, which was itself unreliable on
  * Safari and could leave the preview stuck on "starting camera…"
  * indefinitely. The Capture/Retake buttons are deliberately siblings of
- * the aspect-ratio-clipped video frame, not children of it — nesting them
+ * the aspect-ratio-clipped video frame, not children of it; nesting them
  * inside a box with `overflow: hidden` + `aspect-ratio` risked the button
  * being squeezed out of the box's own bounds and silently clipped.
  */
@@ -66,7 +66,7 @@ export function CameraCapture({ onCapture }: { onCapture: (file: File) => void }
         await video.play();
       } catch {
         // Some browsers reject play() if metadata isn't loaded yet even
-        // though playback starts fine once it is — not fatal on its own,
+        // though playback starts fine once it is; not fatal on its own,
         // onLoadedMetadata below still fires and unblocks the Capture button.
       }
     } catch {
@@ -112,7 +112,7 @@ export function CameraCapture({ onCapture }: { onCapture: (file: File) => void }
         setError("Could not capture that frame. Try again.");
         return;
       }
-      stopStream(); // turn the camera light off — capture is done
+      stopStream(); // turn the camera light off; capture is done
       setActive(false);
       setCapturedUrl(URL.createObjectURL(blob));
       onCapture(new File([blob], "capture.png", { type: "image/png" }));

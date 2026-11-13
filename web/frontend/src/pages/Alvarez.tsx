@@ -115,7 +115,7 @@ export function Alvarez() {
           </div>
           <p>
             The lens command is the estimate from PupilNet with its sign flipped. Because power vectors
-            add exactly, the residual error of the eye plus the lens is simply the estimation error, and
+            add exactly, the residual error of the eye plus the lens equals the estimation error, and
             each component maps to one actuator axis with no coupling between them.
           </p>
         </Section>

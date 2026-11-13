@@ -101,26 +101,27 @@ def min_psf_crop(M_max: float, pupil_radius_mm: float = 2.0,
 
 def calibrated_psf_for_image(
     S: float, C: float, theta_deg: float, image_shape: tuple[int, int],
-    pupil_radius_mm: float = 2.0, wavelength_nm: float = 550.0,
-    assumed_fov_deg: float = 25.0, native_crop_cap: int = 256,
+    pupil_radius_mm: float = 1.5, wavelength_nm: float = 550.0,
+    assumed_fov_deg: float = 50.0, native_crop_cap: int = 512,
 ) -> np.ndarray:
     """
-    Blur kernel sized for an image of image_shape. An image has no real size,
-    so assume it fills assumed_fov_deg of view (a phone or laptop at arm's
-    length), turn the physical blur angle into pixels, and resample the PSF
-    to that. Sizing the kernel any other way makes blur look far too strong
-    or too weak.
+    Blur kernel for a photograph of image_shape. The photo's shorter side is
+    assumed to span assumed_fov_deg of the real scene (a phone's main camera:
+    about 50 deg on the short side of a 4:3 photo), so that the blur matches
+    what this eye would see looking at the scene itself.
+
+    The native PSF has one bin per lambda/d radians (the pupil fills the FFT
+    grid); it is resampled by the exact ratio of that bin angle to the angle
+    of one image pixel. (Until Nov 2026 the whole crop window, which includes
+    a 1.5x margin, was stretched to the blur diameter, so blur came out
+    0.5-0.8x too small; together with a 25 deg field assumption this gave
+    prescription-dependent errors.)
     """
-    from scipy.ndimage import zoom as _zoom
+    from scipy.ndimage import gaussian_filter as _gauss, zoom as _zoom
 
     h, w = image_shape[:2]
     worst = max(abs(S), abs(S + C))  # the two principal meridian powers
-
-    blur_arcmin = blur_diameter_arcmin(worst, pupil_radius_mm)
     arcmin_per_image_px = (assumed_fov_deg * 60.0) / min(h, w)
-    target_px = blur_arcmin / arcmin_per_image_px if arcmin_per_image_px > 0 else 2
-    target_px = int(np.clip(round(target_px), 1, min(h, w) * 0.6))
-    target_px = max(2, target_px + (target_px % 2))  # round up to even, floor 2
 
     native_crop = int(np.clip(min_psf_crop(worst + 0.5, pupil_radius_mm), 16, native_crop_cap))
     native_grid = max(2 * native_crop, 256)
@@ -128,13 +129,17 @@ def calibrated_psf_for_image(
         S, C, theta_deg, pupil_radius_mm=pupil_radius_mm, wavelength_nm=wavelength_nm,
         grid=native_grid, psf_crop=native_crop,
     )
-
-    psf_resampled = _zoom(psf_native, target_px / native_crop, order=1)
+    d = 2.0 * pupil_radius_mm * 1e-3
+    bin_arcmin = (wavelength_nm * 1e-9 / d) * (native_grid - 1) / native_grid * (180.0 / np.pi) * 60.0
+    zoom = bin_arcmin / arcmin_per_image_px
+    if zoom < 1.0:                                   # anti-alias before shrinking
+        psf_native = _gauss(psf_native, 0.5 / zoom)
+    psf_resampled = _zoom(psf_native, zoom, order=1)
     psf_resampled = np.clip(psf_resampled, 0.0, None)
     total = psf_resampled.sum()
-    if total <= 0:
-        psf_resampled = np.ones((3, 3))  # degenerate near-zero-power fallback
-        total = psf_resampled.sum()
+    if psf_resampled.size < 1 or total <= 0:
+        psf_resampled = np.ones((1, 1))
+        total = 1.0
     return psf_resampled / total
 
 

@@ -23,7 +23,7 @@ async def create_simulate_case(
     S: float = Form(..., ge=-8.0, le=6.0),
     C: float = Form(0.0, ge=-4.0, le=0.0),
     axis: float = Form(0.0, ge=0.0, le=180.0),
-    pupil_r_mm: float = Form(2.0, ge=1.0, le=4.0),
+    pupil_r_mm: float = Form(1.5, ge=1.0, le=4.0),
     is_public: bool = Form(True),
     db: Session = Depends(get_db),
 ):

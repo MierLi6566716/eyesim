@@ -98,10 +98,9 @@ for ax, (b, title) in zip(axes.flat, BLOCKS.items()):
     ax.set_xlabel("true refraction set on the model eye (D)")
     ax.set_ylabel("network reading (D)")
 axes.flat[0].legend(loc="upper left", fontsize=8, frameon=False)
-fig.suptitle("Fig. 1  What the network reads vs the true refraction (each dot = one setting, 20 photos)",
+fig.suptitle("Network reading against the refraction set on the model eye (each point: one setting, 20 photographs)",
              x=0.01, ha="left", fontsize=12, fontweight="bold")
-fig.text(0.01, 0.935, "Top row: 37 cm with a +4/+5 lens - readings sit on the perfect line.   "
-         "Bottom row: the +8 lens and the closer distances read 0.6-1.0 D too weak.", fontsize=10, color=INK2)
+fig.text(0.01, 0.935, "Top row: 37 cm with a +4 or +5 D trial lens.   Bottom row: +8 D trial lens, and the 30 cm and 25 cm distances.", fontsize=10, color=INK2)
 fig.tight_layout(rect=(0, 0, 1, 0.93))
 fig.savefig(HERE / "fig1_accuracy.png", dpi=150)
 plt.close(fig)
@@ -146,10 +145,10 @@ for row, (b, dial) in zip(axes, CASES):
     lens = meta.get("lens_d", 0.0)
     row[0].set_ylabel(f"eye + lens {true_sys:+.1f} D\n(dial {meta['true_rx']:+g}" + (f", +{lens:g} lens)" if lens else ")")
                       + f"\nnetwork: {r['sys_ir'][0]:+.1f} D", fontsize=8.5)
-fig.suptitle("Fig. 2  Real photos (blue frame) next to the simulator\nat the same refraction (orange frame)",
+fig.suptitle("Photographs (blue) and simulated frames (orange)\nat the same refraction",
              x=0.01, ha="left", fontsize=12, fontweight="bold")
 fig.text(0.01, 0.005, "Same crop and brightness scaling the network uses. H LED is right of the camera, V LED above it.\n"
-         "Crescent side and growth match. Real crescents are softer, and shorter top-to-bottom than the simulated ones.",
+         "Crescent side and growth agree; photographed crescents are softer and shorter vertically than simulated ones.",
          fontsize=8.5, color=INK2)
 fig.tight_layout(rect=(0, 0.035, 1, 0.94))
 fig.savefig(HERE / "fig2_real_vs_simulated.png", dpi=150)
@@ -182,8 +181,8 @@ for k, (d, im, rr, h) in enumerate(imgs):
     ax.add_patch(plt.Circle((h, h), rr, fill=False, color=S1, lw=0.8))
     ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
     ax.set_title(f"eye + lens\n{d - lens_eff(4):+.1f} D", fontsize=9)
-fig.text(0.01, 0.975, "a  Block A photos, H LED (to the right). Blue circle = the 7 mm pupil. Close to the camera's focus the "
-         "pupil is dark;\n    further away a crescent appears on the LED side and grows. The network reads that growth.",
+fig.text(0.01, 0.975, "a  Block A, H-LED frames (LED to the right of the camera); blue circle: 7 mm aperture. Inside the blind band the "
+         "pupil is dark;\n    beyond it a crescent forms on the LED side and widens with increasing myopia.",
          fontsize=10, fontweight="bold", va="top")
 
 ax = fig.add_subplot(gs[1, :])
@@ -201,14 +200,14 @@ ax.text(2.2, -0.15, "crescent on the far side\n(more hyperopic)", fontsize=9, co
 sim_lo = Ms[np.nonzero(cls == 0)[0][0]] - 0.125
 sim_hi = Ms[np.nonzero(cls == 0)[0][-1]] + 0.125
 ax.axvspan(sim_lo, sim_hi, color=S2, alpha=0.07, lw=0)
-ax.text(0.5 * (sim_lo + sim_hi), -0.5, "blind band: no crescent, so the pupil carries no reading.\n"
-        "A trial lens moves the eye out of it.", ha="center", fontsize=9, color=INK)
+ax.text(0.5 * (sim_lo + sim_hi), -0.5, "blind band: no crescent, no reading.\n"
+        "A trial lens shifts the eye out of it.", ha="center", fontsize=9, color=INK)
 ax.set_xlim(-14, 5); ax.set_ylim(-0.62, 0.58)
 ax.set_xlabel("refraction of eye + trial lens (D)")
 ax.set_ylabel("where the light sits in the pupil\n(+ LED side,  − far side)")
 ax.legend(loc="upper right", fontsize=9, frameon=False)
-ax.set_title("b  37 cm, 7 mm pupil: same pattern as the simulator. Real edges are 0.3-0.8 D further out "
-             "(probably: a faint first crescent is lost in real noise)", loc="left", fontsize=10)
+ax.set_title("b  37 cm, 7 mm pupil: crescent position against refraction. The measured band edges lie 0.3-0.8 D outside the simulated ones.",
+             loc="left", fontsize=10)
 fig.tight_layout(rect=(0, 0, 1, 0.93))
 fig.savefig(HERE / "fig3_physics.png", dpi=150)
 plt.close(fig)

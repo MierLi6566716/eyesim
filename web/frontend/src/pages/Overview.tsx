@@ -1,33 +1,33 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
-import { Article, Note, PageHeader, Section, Stat, StatRow, Tex, articleStyles as a, type TocEntry } from "../components/Article";
+import { Article, Note, PageHeader, Section, Stat, StatRow, articleStyles as a, type TocEntry } from "../components/Article";
 
 const TOC: TocEntry[] = [
-  { id: "idea", num: "0.1", title: "The idea" },
-  { id: "state", num: "0.2", title: "State of the project" },
-  { id: "numbers", num: "0.3", title: "The numbers that matter" },
-  { id: "prior-work", num: "0.4", title: "What already exists" },
-  { id: "roadmap", num: "0.5", title: "Path to a wearable" },
+  { id: "idea", num: "0.1", title: "Concept" },
+  { id: "state", num: "0.2", title: "Project status" },
+  { id: "results", num: "0.3", title: "Principal results" },
+  { id: "prior-work", num: "0.4", title: "Related work" },
+  { id: "roadmap", num: "0.5", title: "Development plan" },
 ];
 
-type Row = { stage: string; status: "done" | "in progress" | "next" | "planned"; result: ReactNode; link: string; page: string };
+type Row = { stage: string; status: "complete" | "in progress" | "next" | "planned"; result: ReactNode; link: string; page: string };
 
 const STATE: Row[] = [
-  { stage: "Physics simulator (optics, photorefraction, sensor)", status: "done", result: <>generates unlimited labeled frames; validated against a physical eye</>, link: "/simulation", page: "Simulation" },
-  { stage: "PupilNet trained on simulation only", status: "done", result: <>0.65 D on held-out synthetic frames; 152k parameters</>, link: "/network", page: "Network" },
-  { stage: "Model-eye campaign (170 settings, 3,400 shots)", status: "done", result: <>0.20 D at 37 cm with a +4/+5 D lens; repeats to ~0.2 D</>, link: "/model-eye", page: "Model eye" },
-  { stage: "Failure analysis and self-check", status: "done", result: <>every &gt;0.5 D error traced; lens-step self-check flags bad blocks</>, link: "/network", page: "Network" },
-  { stage: "Closed-loop control vs accommodation (RL)", status: "done", result: <>0.46 D vs 0.55 D for the best hand rule &mdash; in simulation</>, link: "/control", page: "Control" },
-  { stage: "Video photorefraction (accommodation tracing)", status: "in progress", result: <>~13 reading pairs/s in a synthetic end-to-end test; untested on the Pi</>, link: "/control", page: "Control" },
-  { stage: "Strong-lens and close-distance accuracy", status: "in progress", result: <>+8 D lens reads ~1 D weak; unexplained</>, link: "/network", page: "Network" },
-  { stage: "Clip-on module (relay + camera + motor)", status: "next", result: <>design modelled; optics checked in simulation; parts list drawn up</>, link: "/prototype", page: "Prototype" },
-  { stage: "Alvarez plates characterized at 850 nm", status: "next", result: <>power-per-mm, astigmatism, transmission, glints</>, link: "/alvarez", page: "Alvarez lens" },
-  { stage: "Own-eye accommodation trace; fit the patient model", status: "next", result: <>decides whether the learned policy's gain is real</>, link: "/control", page: "Control" },
-  { stage: "Assembled prototype on the model eye, then human eyes", status: "planned", result: <>against a clinical reference, under research oversight</>, link: "/prototype", page: "Prototype" },
+  { stage: "Physics simulator (optics, photorefraction, sensor)", status: "complete", result: <>labelled training images; compared against a physical eye</>, link: "/simulation", page: "Simulation" },
+  { stage: "Refraction network trained on simulated images", status: "complete", result: <>152,451 parameters; 0.65 D on held-out simulated images</>, link: "/network", page: "Network" },
+  { stage: "Model-eye validation (170 settings, 3,400 shots)", status: "complete", result: <>0.20 D at 37 cm with a +4 or +5 D lens; repeatable to about 0.2 D</>, link: "/model-eye", page: "Model eye" },
+  { stage: "Error analysis and consistency check", status: "complete", result: <>sources of errors above 0.5 D identified; lens-step check flags unreliable blocks</>, link: "/network", page: "Network" },
+  { stage: "Learned control under accommodation", status: "complete", result: <>0.46 D against 0.55 D for the best fixed procedure, in simulation</>, link: "/control", page: "Control" },
+  { stage: "Human-eye measurement", status: "in progress", result: <>network under-reads by 1 to 5.6 D; LED balance and capture conditions under correction</>, link: "/network", page: "Network" },
+  { stage: "Video photorefraction", status: "in progress", result: <>about 13 frame pairs per second in a synthetic test; not yet run on the camera</>, link: "/control", page: "Control" },
+  { stage: "Accuracy with strong trial lenses and at short distance", status: "in progress", result: <>+8 D lens reads about 1 D weak; cause not yet identified</>, link: "/network", page: "Network" },
+  { stage: "Clip-on measurement module", status: "next", result: <>design modelled; relay optics verified in simulation</>, link: "/prototype", page: "Prototype" },
+  { stage: "Alvarez plate characterisation at 850 nm", status: "next", result: <>power per millimetre, astigmatism, transmission, reflections</>, link: "/alvarez", page: "Alvarez lens" },
+  { stage: "Integrated prototype on the model eye, then on human eyes", status: "planned", result: <>against a clinical reference, under research oversight</>, link: "/prototype", page: "Prototype" },
 ];
 
 const STATUS_COLOR: Record<Row["status"], string> = {
-  done: "var(--green)", "in progress": "var(--blue)", next: "var(--ink)", planned: "var(--ink-3)",
+  complete: "var(--green)", "in progress": "var(--blue)", next: "var(--ink)", planned: "var(--ink-3)",
 };
 
 export function Overview() {
@@ -38,40 +38,35 @@ export function Overview() {
         title="Glasses that measure a prescription and correct it themselves"
         lede={
           <>
-            eyesim is a research project on autonomous refraction. An infrared camera photographs the
-            pupil, a neural network trained only in simulation reads the refractive error, and an
-            adjustable Alvarez lens is set to cancel it. The estimator is now validated on a physical
-            model eye; this site documents the physics, the measurements, the control problem and the
-            instrument being built around them.
+            eyesim is a research project on automatic refraction. An infrared camera photographs the
+            pupil, a neural network trained on simulated images estimates the refractive error, and an
+            adjustable Alvarez lens is set to correct it. The estimator has been validated on a physical
+            model eye; work on human eyes and on the wearable instrument is in progress.
           </>
         }
       />
       <Article toc={TOC}>
-        <Section id="idea" num="0.1" title="The idea">
+        <Section id="idea" num="0.1" title="Concept">
           <p>
-            A normal eye exam is a slow search guided by the patient's answers. Eccentric photorefraction
-            replaces it with one photograph: a small infrared LED sits beside a camera lens, and the pupil
-            in the resulting photo shows a bright crescent whose side and extent encode the eye's
-            refractive error.
+            A conventional eye examination is an iterative search guided by the patient's responses.
+            Eccentric photorefraction replaces it with a photograph: an infrared LED placed beside a
+            camera lens produces a bright crescent in the pupil, and the side and extent of that crescent
+            depend on the refractive error of the eye.
           </p>
-          <p>The device is a loop of three steps:</p>
+          <p>The instrument repeats three steps:</p>
           <ol>
-            <li><strong>Sense.</strong> Capture infrared pupil frames, one per LED.</li>
-            <li><strong>Estimate.</strong> A small CNN maps the frames to the refraction.</li>
-            <li><strong>Correct.</strong> Slide an Alvarez lens to the opposite power &mdash; and re-measure through it until the residual is zero.</li>
+            <li><strong>Sense.</strong> Record infrared pupil frames, one for each LED.</li>
+            <li><strong>Estimate.</strong> A small convolutional network converts the frames into a refraction.</li>
+            <li><strong>Correct.</strong> Move an Alvarez lens to the opposite power, then measure again through it until the residual error is zero.</li>
           </ol>
           <p>
-            The re-measuring matters: because the camera looks through the very lens it is setting, a
-            cheap, sticky actuator still converges. Accuracy lives in the sensing loop, not in the
-            mechanics. That is the design bet that makes a low-cost wearable plausible.
+            Because the camera views the eye through the lens being adjusted, each measurement reports
+            the remaining error directly. An inexpensive actuator with backlash still converges; accuracy
+            is set by the measurement, not by the mechanism. This is the basis for a low-cost wearable.
           </p>
         </Section>
 
-        <Section id="state" num="0.2" title="State of the project">
-          <p>
-            What has been done, what it produced, and what comes next. Every number is measured, not
-            projected; each row links to the page with the full account.
-          </p>
+        <Section id="state" num="0.2" title="Project status">
           <div className={a.tableWrap}>
             <table className={a.table}>
               <thead><tr><th>Stage</th><th>Status</th><th>Result</th><th></th></tr></thead>
@@ -89,61 +84,52 @@ export function Overview() {
           </div>
         </Section>
 
-        <Section id="numbers" num="0.3" title="The numbers that matter">
+        <Section id="results" num="0.3" title="Principal results">
           <StatRow>
-            <Stat value="0.20" unit="D" label="mean |error| on a physical model eye at 37 cm with a +4/+5 D trial lens (26 settings), network trained on zero real photos" />
-            <Stat value="0.26" unit="D" label="mean |error| after removing and re-placing the eye (repeatability)" />
-            <Stat value="0.46 vs 0.55" unit="D" label="learned control policy vs the best hand-written rule, on 2,000 simulated refocusing eyes" />
-            <Stat value="0.27" unit="D" label="cost of a 0.5 mm pupil mis-centring — why centring is a first-class problem" />
+            <Stat value="0.20" unit="D" label="mean absolute error on a physical model eye at 37 cm with a +4 or +5 D trial lens (26 settings), with no real images in training" />
+            <Stat value="0.26" unit="D" label="mean absolute error after the eye was removed and replaced" />
+            <Stat value="0.46" unit="D" label="learned lens control on 2,000 simulated eyes, against 0.55 D for the best fixed procedure" />
+            <Stat value="0.27" unit="D" label="median change in reading per 0.5 mm of pupil-centring error" />
           </StatRow>
-          <Note label="Read the numbers honestly.">
+          <Note label="Conditions.">
             <p>
-              The 0.20 D holds at the design distance with a moderate lens; a +8 D lens or a 25&ndash;30 cm
-              distance degrades it to 0.66&ndash;1.0 D, and only settings whose photo shows a crescent are
-              measurable at all (63 of 170 &mdash; the rest sit in the physical blind band, which the trial
-              lens exists to escape). The control result is simulation-only. Both caveats have measurement
-              plans, not excuses: see <Link to="/network">Network</Link> and <Link to="/control">Control</Link>.
+              The 0.20 D figure applies at the design distance with a moderate trial lens. With a +8 D
+              lens, or at 25 to 30 cm, the error rises to 0.66 to 1.0 D, and only settings whose
+              photograph shows a crescent can be measured (63 of 170). On a human eye the network
+              currently under-reads by 1 to 5.6 D. The control result is from simulation.
             </p>
           </Note>
         </Section>
 
-        <Section id="prior-work" num="0.4" title="What already exists">
+        <Section id="prior-work" num="0.4" title="Related work">
           <p className={a.runin}>
-            <strong>Reading crescents with networks</strong> exists: on real photographs, against clinical
-            references (Chun 2020; Xu 2022, 0.18 D with six LED meridians at 1 m; Vu/Essilor 2024, trained
-            on simulation <em>plus</em> real volunteer images). Training on simulation alone and validating
-            against an exactly known physical eye &mdash; with each failure explained &mdash; is our corner.
+            <strong>Network-based photorefraction.</strong> Networks trained on real photographs have been
+            evaluated against clinical refraction (Chun et al., 2020; Xu et al., 2022, 0.18 D with six LED
+            meridians at 1 m). Vu et al. (2024) trained on simulated and real volunteer images combined.
+            This project trains on simulated images only and validates against an eye of exactly known
+            refraction.
           </p>
           <p className={a.runin}>
-            <strong>Tunable-lens refraction instruments</strong> exist as benchtop and handheld devices
-            (e.g. a wavefront-sensor instrument with a tunable lens, PlenOptika's patent family). A clip-on
-            that measures <em>through</em> the wearer's own adjustable lens and then sets it: not found.
+            <strong>Tunable-lens refraction.</strong> Bench-top and hand-held instruments combine a
+            tunable lens with a wavefront sensor (for example US patent 11,096,576). No clip-on device
+            that measures through the wearer's own adjustable lens and then sets it was found.
           </p>
           <p className={a.runin}>
-            <strong>Control against accommodation</strong> is handled clinically by drops or fixed fogging
-            protocols. A learned, per-person policy: not found. Closest prior art is RL for other eye
-            instruments (perimetry ordering; OCT focus).
-          </p>
-          <p>
-            Searches were web-scale, not a patent clearance. The <Tex>M</Tex>&middot;<Tex>D</Tex> ambiguity
-            and the sim-to-real gap called out on this page's first version are both now measured on the
-            bench instead of feared: see <Link to="/model-eye">Model eye</Link>.
+            <strong>Accommodation control.</strong> Clinical practice uses cycloplegic drops or a fixed
+            fogging protocol. No learned, individually adaptive procedure was found; the nearest
+            reinforcement-learning work in ophthalmic instruments concerns perimetry and OCT focusing.
           </p>
         </Section>
 
-        <Section id="roadmap" num="0.5" title="Path to a wearable">
+        <Section id="roadmap" num="0.5" title="Development plan">
           <ol>
-            <li><strong>Simulate the full loop</strong> &mdash; done, with measured results.</li>
-            <li><strong>Validate the estimator on a physical model eye</strong> &mdash; done: 0.20 D at the design point; weak spots identified and listed.</li>
-            <li><strong>Measure a real eye's accommodation trace</strong> with the new video mode; fit the patient model; settle whether the learned policy survives contact with a human eye.</li>
-            <li><strong>Characterize the Alvarez plates</strong> at 850 nm and motorize one pair.</li>
-            <li><strong>Build the clip-on module</strong> around the relay lens and run the whole loop on the model eye.</li>
-            <li><strong>Human validation</strong> against a clinical reference, under research oversight.</li>
+            <li><strong>Simulate the complete loop.</strong> Complete.</li>
+            <li><strong>Validate the estimator on a physical model eye.</strong> Complete; limitations identified.</li>
+            <li><strong>Repeat the human-eye measurement</strong> with balanced LEDs, and record the time course of accommodation with the video mode.</li>
+            <li><strong>Characterise the Alvarez plates</strong> at 850 nm and motorise one pair.</li>
+            <li><strong>Build the clip-on module</strong> and operate the full loop on the model eye.</li>
+            <li><strong>Evaluate on human eyes</strong> against a clinical reference, under research oversight.</li>
           </ol>
-          <p>
-            The <Link to="/tools/simulate">Tools</Link> section still runs the full-resolution physics and
-            the trained checkpoint on your own images, from the browser.
-          </p>
         </Section>
       </Article>
     </>

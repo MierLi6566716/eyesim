@@ -82,7 +82,7 @@ export function BenchFigure() {
           <Suspense fallback={<div className={local.loading}>Loading 3D bench…</div>}>
             <BenchScene f0mm={f0} dxMm={dx} axisDeg={axis} hasCyl={C !== 0} pupilMm={pupil} firing={firing} labels={labels} dark={dark} />
           </Suspense>
-          <div className={local.hint}>Drag to orbit, scroll to zoom, right-drag to pan</div>
+          <div className={local.hint}>Interactive view: orbit, zoom and pan</div>
           <div className={local.frames}>
             <div className={local.frame}>
               <div className={`${styles.canvasFrame} ${styles.canvasDark}`} style={{ outline: firing === "h" ? "2px solid var(--red)" : undefined }}>

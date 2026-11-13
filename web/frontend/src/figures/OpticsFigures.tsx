@@ -10,6 +10,10 @@ import { EyeControls, type Eye } from "./EyeControls";
 import styles from "./figures.module.css";
 
 const N_IMG = 256;
+/** CSS pixels per arcminute at a 60 cm viewing distance (1 CSS px = 0.2646 mm). */
+const CSS_PX_PER_ARCMIN = (600 * Math.tan(Math.PI / 10800)) / 0.2646;
+/** Width at which the chart subtends its true angle (1 image px = 1 arcmin) at 60 cm. */
+const TRUE_SCALE_W = Math.round(N_IMG * ARCMIN_PER_PX * CSS_PX_PER_ARCMIN);
 let chartCache: Float64Array | null = null;
 function chart() {
   if (!chartCache) chartCache = letterChart(N_IMG);
@@ -89,8 +93,10 @@ export function OpticsChainFigure({ eye, onChange }: { eye: Eye; onChange: (e: E
               <span className={styles.paneTitle}><span className={styles.step}>c</span>Retinal image</span>
               <span className={styles.paneMeta}>{(N_IMG * ARCMIN_PER_PX / 60).toFixed(1)}° field</span>
             </div>
-            <div className={styles.canvasFrame}>
-              <FieldCanvas data={o.retina} n={N_IMG} map={gray} label="Letter chart as seen by this eye" smooth />
+            <div className={styles.canvasFrame} style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+              <div style={{ width: TRUE_SCALE_W }}>
+                <FieldCanvas data={o.retina} n={N_IMG} map={gray} label="Letter chart as seen by this eye" smooth />
+              </div>
             </div>
             <div className={styles.paneFoot}>
               <span className={styles.badge}>
@@ -136,21 +142,21 @@ export function PredistortFigure({ eye }: { eye: Eye }) {
           <div className={styles.paneHead}>
             <span className={styles.paneTitle}><span className={styles.step}>a</span>Normal screen, seen by the eye</span>
           </div>
-          <div className={styles.canvasFrame}><FieldCanvas data={o.retina} n={N_IMG} map={gray} label="Blurred chart" smooth /></div>
+          <div className={styles.canvasFrame} style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><div style={{ width: TRUE_SCALE_W }}><FieldCanvas data={o.retina} n={N_IMG} map={gray} label="Blurred chart" smooth /></div></div>
           <div className={styles.paneFoot}>Edge energy {pct(sharpness(o.retina, N_IMG))} of original</div>
         </div>
         <div className={styles.pane}>
           <div className={styles.paneHead}>
             <span className={styles.paneTitle}><span className={styles.step}>b</span>Pre-distorted screen</span>
           </div>
-          <div className={styles.canvasFrame}><FieldCanvas data={pre.display} n={N_IMG} map={gray} label="Pre-distorted chart" smooth /></div>
+          <div className={styles.canvasFrame} style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><div style={{ width: TRUE_SCALE_W }}><FieldCanvas data={pre.display} n={N_IMG} map={gray} label="Pre-distorted chart" smooth /></div></div>
           <div className={styles.paneFoot}>What the display shows, clipped to [0, 1]</div>
         </div>
         <div className={styles.pane}>
           <div className={styles.paneHead}>
             <span className={styles.paneTitle}><span className={styles.step}>c</span>Pre-distorted, seen by the eye</span>
           </div>
-          <div className={styles.canvasFrame}><FieldCanvas data={pre.perceived} n={N_IMG} map={gray} label="Pre-distorted chart as perceived" smooth /></div>
+          <div className={styles.canvasFrame} style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><div style={{ width: TRUE_SCALE_W }}><FieldCanvas data={pre.perceived} n={N_IMG} map={gray} label="Pre-distorted chart as perceived" smooth /></div></div>
           <div className={styles.paneFoot}>Edge energy {pct(sharpness(pre.perceived, N_IMG))} of original</div>
         </div>
       </div>

@@ -14,8 +14,8 @@ const N = 112;
 let star: Float64Array | null = null;
 const target = () => (star ??= siemensStar(N, 20));
 
-/** Test-set MAE of PupilNet (checkpoints/best.pt) — used to draw a realistic CNN estimate. */
-export const CNN_MAE = { M: 0.184, J0: 0.046, J45: 0.05 };
+/** Test-set MAE of the base network (checkpoints/best.pt) on simulated frames with a visible crescent; used to draw a realistic CNN estimate. */
+export const CNN_MAE = { M: 0.522, J0: 0.093, J45: 0.195 };
 
 export function simulatedCnn(eye: PowerVector, seed: number): PowerVector {
   const r = mulberry32(seed);

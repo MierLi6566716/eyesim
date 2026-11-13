@@ -2,7 +2,7 @@
  * Live GPU screen-filter: a fullscreen WebGL2 fragment shader that
  * convolves an uploaded photo against the small PSF kernel returned by
  * POST /api/cases/simulate. Deliberately scoped to the uploaded image for
- * v1 (not an arbitrary live page/webcam snapshot) — see
+ * v1 (not an arbitrary live page/webcam snapshot); see
  * proposal (web build plan) for why. The kernel is capped at ~24x24 by the
  * backend (services/physics.py::_SHADER_KERNEL_MAX) specifically so this
  * per-fragment double loop stays real-time.

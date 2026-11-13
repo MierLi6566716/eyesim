@@ -295,7 +295,7 @@ export function predistort(
   return { display, perceived };
 }
 
-/** Mean squared gradient — the sharpness objective used by eyesim.optimize. */
+/** Mean squared gradient; the sharpness objective used by eyesim.optimize. */
 export function sharpness(img: Float64Array, n: number): number {
   let s = 0;
   for (let y = 1; y < n - 1; y++) {

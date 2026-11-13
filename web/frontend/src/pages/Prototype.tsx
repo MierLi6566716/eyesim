@@ -13,18 +13,18 @@ const TOC: TocEntry[] = [
 ];
 
 const PART_NOTES: Record<PartId, string> = {
-  frame: "Carries both Alvarez lens stacks. No electronics: the glasses stay cheap and dumb.",
-  plates: "Two moulded cubic plates per eye; sliding them sideways sets sphere power (Alvarez, 1967). Ours came from consumer adjustable glasses with the knob removed.",
-  slider: "The tab the module's motor grips, so the module can set the lens power it is measuring through.",
-  temples: "Standard temples; the module clamps to the frame, not to the head.",
-  housing: "A light-tight tube. It also blocks this eye's view, which matters: a covered eye relaxes with its open partner (consensual accommodation).",
-  relay: "The key optic. With the camera at its focal plane, the camera behaves as if it were at optical infinity, so “no crescent” means exactly “eye + lens corrected”.",
-  camera: "A small NoIR sensor at the relay focus, 100 mm from the relay. Our bench uses a Raspberry Pi IMX708; the wearable wants a board camera.",
-  leds: "Two surface-mount 850 nm LEDs, about 2 mm off the camera axis. Our simulation says 1 mm is too close: the pupil never goes dark, so there is no band to find.",
-  motor: "A micro lead-screw stepper that slides the plates. Accuracy comes from the camera loop, not from the motor: the loop only needs the sign and rough size of the step.",
-  encoder: "Reads the plate position so the converged setting can be reported in dioptres after a one-time lensmeter calibration.",
-  mcu: "Runs the 152k-parameter network (about 150 KB at 8-bit). Candidate: a camera-capable microcontroller board.",
-  battery: "Sized for sessions, not all-day wear: a measurement is seconds long.",
+  frame: "Carries both Alvarez lens stacks. The glasses contain no electronics.",
+  plates: "Two moulded cubic plates per eye; sliding them sideways sets the spherical power (Alvarez, 1967). The current plates come from consumer adjustable glasses with the adjustment knob removed.",
+  slider: "The tab engaged by the module's motor, which allows the module to set the lens through which it measures.",
+  temples: "Standard temples. The module clamps to the frame.",
+  housing: "A light-tight tube. It covers the measured eye, whose accommodation then follows the uncovered eye (consensual accommodation).",
+  relay: "With the camera at its focal plane, the camera is optically at infinity, so the absence of a crescent indicates that eye and lens together are corrected.",
+  camera: "A small near-infrared sensor at the relay focus, 100 mm from the relay. The bench uses a Raspberry Pi IMX708; the wearable requires a board camera.",
+  leds: "Two surface-mount 850 nm LEDs, about 2 mm from the camera axis. In simulation an offset of 1 mm is too small: the pupil never becomes dark, and there is no band to locate.",
+  motor: "A micro lead-screw stepper that slides the plates. Accuracy is set by the camera loop rather than by the motor, which needs only the correct direction and an approximate step size.",
+  encoder: "Reads the plate position, so that the final setting can be reported in dioptres after a one-time lensmeter calibration.",
+  mcu: "Runs the 152,451-parameter network (about 150 KB at 8-bit precision) on a camera-capable microcontroller.",
+  battery: "Sized for occasional sessions rather than continuous wear; a measurement lasts seconds.",
 };
 
 const BOM: { part: string; status: "have" | "to buy" | "to decide"; note: string }[] = [
@@ -34,8 +34,8 @@ const BOM: { part: string; status: "have" | "to buy" | "to decide"; note: string
   { part: "Arduino LED driver", status: "have", note: "switches H/V LEDs between frames" },
   { part: "XSJ-501 model eye + trial lenses", status: "have", note: "ground truth for every bench test" },
   { part: "Relay lens, f = 100 mm, Ø25 mm achromat", status: "to buy", note: "sets module length; coated for near-infrared" },
-  { part: "Micro lead-screw stepper + driver", status: "to buy", note: "20–30 µm step if plate gain is 4–6 D/mm — but the loop relaxes this" },
-  { part: "Position encoder (linear strip)", status: "to buy", note: "needed only to report the number, not to converge" },
+  { part: "Micro lead-screw stepper + driver", status: "to buy", note: "20–30 µm step for a plate gain of 4–6 D/mm; the closed loop relaxes this requirement" },
+  { part: "Position encoder (linear strip)", status: "to buy", note: "required to report the setting, not for convergence" },
   { part: "Module controller (camera-capable MCU)", status: "to decide", note: "depends on 8-bit network latency per frame" },
   { part: "Housing (3D-printed tube + clamp)", status: "to decide", note: "first version can be printed around the bench camera" },
 ];
@@ -49,24 +49,25 @@ export function Prototype() {
     <>
       <PageHeader
         kicker="4 · Prototype"
-        title="The instrument we are building"
+        title="The measuring instrument"
         lede={
           <>
-            Cheap adjustable glasses, and a clip-on module that measures the eye through its own lens and
-            then sets that lens. The model below is the current design intent, drawn to scale in
-            millimetres. Drag to orbit, click a part to read about it, and pull the assembly apart.
+            The instrument consists of inexpensive adjustable glasses and a clip-on module that measures
+            the eye through the glasses' own lens and then sets that lens. The model below shows the
+            current design to scale in millimetres; each part can be selected, and the assembly can be
+            separated into its components.
           </>
         }
       />
       <Article toc={TOC}>
-        <Section id="model" num="4.1" title="The prototype, part by part">
+        <Section id="model" num="4.1" title="Components">
           <Figure
             num={1}
             caption={
               <>
-                Design model of the prototype. The tube clips in front of the right lens; its length is the
-                relay's 100 mm focal distance. Dashed blue: the measurement path from pupil through the
-                Alvarez stack and relay to the camera. Dimensions are design intent, not a measured drawing.
+                Design model of the prototype. The module attaches in front of the right lens; its length
+                is set by the 100 mm focal length of the relay lens. Dashed line: measurement path from the
+                pupil through the Alvarez plates and the relay lens to the camera. Dimensions are nominal.
               </>
             }
           >
@@ -90,14 +91,14 @@ export function Prototype() {
               </label>
             </div>
           </Figure>
-          <Panel title={selected ? PART_LABELS[selected] : "Click a part"}>
+          <Panel title={selected ? PART_LABELS[selected] : "Selected part"}>
             <p style={{ margin: 0 }}>
-              {selected ? PART_NOTES[selected] : "Each part in the model is clickable. The numbers match the bill of parts below."}
+              {selected ? PART_NOTES[selected] : "None selected. Part numbers correspond to the table below."}
             </p>
           </Panel>
           <div className={a.tableWrap}>
             <table className={a.table}>
-              <thead><tr><th>#</th><th>Part</th><th>Why it is there</th></tr></thead>
+              <thead><tr><th>#</th><th>Part</th><th>Function</th></tr></thead>
               <tbody>
                 {(Object.keys(PART_LABELS) as PartId[]).map((id) => (
                   <tr key={id} style={selected === id ? { background: "var(--blue-soft)" } : undefined}>
@@ -111,27 +112,26 @@ export function Prototype() {
           </div>
         </Section>
 
-        <Section id="measure" num="4.2" title="How a measurement runs">
+        <Section id="measure" num="4.2" title="Measurement sequence">
           <ol>
-            <li>Clip the module over one lens. That eye sees only darkness; the other eye looks at something far away, and both eyes relax together (accommodation is consensual).</li>
-            <li>The LEDs flash, the camera takes pupil frames through the Alvarez lens and the relay.</li>
-            <li>The motor sweeps the lens until the crescent vanishes and reappears on the other side; the midpoint of that dark band is the null. Because the camera sits at the relay focus, the null means <em>eye + lens focused at infinity</em> &mdash; the lens is now the prescription.</li>
-            <li>The encoder reports the converged plate position in dioptres. Then the module moves to the other lens and repeats.</li>
+            <li>The module is attached over one lens. The measured eye sees only the dark interior of the module, while the other eye views a distant target; because accommodation is consensual, both eyes relax together.</li>
+            <li>The LEDs are pulsed and the camera records pupil frames through the Alvarez lens and the relay lens.</li>
+            <li>The motor sweeps the lens until the crescent disappears and reappears on the opposite side. Because the camera is optically at infinity, the centre of this dark band corresponds to eye and lens together focused at infinity, so the lens setting equals the prescription.</li>
+            <li>The encoder reports the final plate position in dioptres, and the procedure is repeated on the other eye.</li>
           </ol>
           <p>
-            The loop never needs to trust the motor. A sticky, imprecise actuator still converges, because
-            every frame re-measures the residual error through the very lens being set. What the sweep{" "}
-            <em>cannot</em> fix is an eye that re-focuses mid-measurement; that is the{" "}
-            <Link to="/control">control problem</Link>, and covering the measured eye is half of the answer.
+            The loop does not depend on the accuracy of the motor: each frame measures the remaining error
+            through the lens being set, so an imprecise actuator still converges. The sweep does not
+            compensate for an eye that changes focus during the measurement. That problem is treated on
+            the <Link to="/control">control page</Link>; covering the measured eye removes much of it.
           </p>
-          <Note label="Checked in simulation.">
+          <Note label="Simulation check.">
             <p>
-              With the LED 2 mm off axis and a 5 mm pupil, the dark band spans about <Tex>{"-2.25"}</Tex> to{" "}
-              <Tex>{"+2.0"}</Tex> D around the null and its midpoint lands within 0.125 D of zero for 3&ndash;7 mm
-              pupils &mdash; but only for an aberration-free eye. Real spherical aberration shifts the midpoint
-              by up to about 1 D at large pupils, which is why the band edges should be read at a small pupil,
-              or corrected with a second measurement (see <Link to="/network">the network page</Link> for how
-              pupil geometry already bit us once).
+              With the LED 2 mm from the camera axis and a 5 mm pupil, the dark band extends from about{" "}
+              <Tex>{"-2.25"}</Tex> to <Tex>{"+2.0"}</Tex> D around the null. For an eye without aberrations
+              its centre lies within 0.125 D of zero for pupils of 3 to 7 mm. Spherical aberration shifts
+              the centre by up to about 1 D at large pupils; the band is therefore read at a small pupil, or
+              at two pupil sizes from which the shift is extrapolated.
             </p>
           </Note>
         </Section>
@@ -155,11 +155,11 @@ export function Prototype() {
 
         <Section id="open" num="4.4" title="Open engineering questions">
           <ul>
-            <li><strong>Alvarez plates in the measurement path.</strong> The camera looks through them: their off-centre astigmatism, 850 nm transmission and surface glints must be measured before the module is built around them.</li>
-            <li><strong>Range.</strong> Reading both band edges needs the lens to reach prescription &plusmn; about 2.5 D. A &minus;6.75 D eye with a &minus;6&hellip;+3 D lens cannot; there the network reads the crescent on one readable side instead of bracketing.</li>
-            <li><strong>Vertex distance and tilt.</strong> The module must sit repeatably; our bench showed 0.5 mm of pupil mis-centring already costs ~0.27 D.</li>
-            <li><strong>Bright rooms.</strong> Small pupils widen the band. The midpoint method tolerates that; one-sided network readings get harder.</li>
-            <li><strong>Eye safety.</strong> 850 nm exposure at a few centimetres must be checked against the exposure limits before any human use.</li>
+            <li><strong>Alvarez plates in the measurement path.</strong> The camera views the eye through the plates, so their off-centre astigmatism, transmission at 850 nm and surface reflections constrain the module design.</li>
+            <li><strong>Range.</strong> Locating both band edges requires the lens to reach the prescription &plusmn; about 2.5 D. Where the plates cannot reach that range, the network reads the crescent on one side of the band instead.</li>
+            <li><strong>Vertex distance and tilt.</strong> The module must be positioned repeatably; on the bench, a 0.5 mm pupil-centring error changed the reading by 0.27 D (median).</li>
+            <li><strong>Illumination.</strong> Small pupils widen the band. The midpoint method is unaffected; single-sided network readings become more difficult.</li>
+            <li><strong>Eye safety.</strong> Infrared exposure at a distance of a few centimetres requires verification against exposure limits before use on human eyes.</li>
           </ul>
         </Section>
       </Article>

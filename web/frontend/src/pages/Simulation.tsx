@@ -15,11 +15,11 @@ const TOC: TocEntry[] = [
   { id: "photorefraction", num: "1.4", title: "Photorefraction sensing" },
   { id: "cnn", num: "1.5", title: "PupilNet estimator" },
   { id: "closed-loop", num: "1.6", title: "Closing the loop" },
-  { id: "limits", num: "1.7", title: "What the simulation can't tell us" },
+  { id: "limits", num: "1.7", title: "Limits of the simulation" },
 ];
 
 export function Simulation() {
-  const [eye, setEye] = useState<Eye>({ S: -2.25, C: -0.75, axis: 30, pupil: 2 });
+  const [eye, setEye] = useState<Eye>({ S: -2.25, C: -0.75, axis: 30, pupil: 1.5 });
   return (
     <>
       <PageHeader
@@ -29,7 +29,7 @@ export function Simulation() {
           <>
             Before building hardware, we built a simulation of every stage: how a prescription blurs the
             retinal image, what an infrared camera sees in the pupil, how a CNN reads that image back, and
-            how a tunable lens converges on the correction. Figures 1 to 7 recompute live in your browser.
+            how a tunable lens converges on the correction. Figures 1 to 7 are computed live in the browser.
           </>
         }
       />
@@ -45,9 +45,9 @@ export function Simulation() {
           <p>
             <Tex>M</Tex> is the spherical equivalent. <Tex>{"(J_0, J_{45})"}</Tex> is a Cartesian astigmatism
             vector. Distances in this space are clinically meaningful, and sums are exact: the residual
-            error of an eye wearing a lens is simply <Tex>{String.raw`\mathbf{p}_{\text{eye}} + \mathbf{p}_{\text{lens}}`}</Tex>.
+            error of an eye wearing a lens is <Tex>{String.raw`\mathbf{p}_{\text{eye}} + \mathbf{p}_{\text{lens}}`}</Tex>.
           </p>
-          <Figure num={1} caption="The same prescription in two representations. Drag the axis slider through 180° and the J-plane point returns to where it started. The power vector has no discontinuity to learn around.">
+          <Figure num={1} caption="The same prescription in two representations. As the axis passes through 180°, the point in the J-plane returns to its starting position; the power vector has no discontinuity.">
             <PowerVectorFigure eye={eye} onChange={setEye} />
           </Figure>
         </Section>
@@ -70,8 +70,9 @@ export function Simulation() {
             caption={
               <>
                 Live optics chain. (a) Wavefront error over the pupil, in waves. (b) Point-spread function,
-                log intensity. (c) A letter chart at true Snellen scale (1 px = 1 arcmin; the bottom row is
-                20/20) convolved with that PSF. Try a pure cylinder: blur smears along one meridian only.
+                log intensity. (c) A letter chart convolved with that PSF, at 1 image pixel per arcminute
+                (the bottom row is 20/20) and displayed at its true angular size for a viewing distance of
+                60 cm. A pure cylinder blurs along one meridian only.
               </>
             }
           >
@@ -126,22 +127,24 @@ export function Simulation() {
 
         <Section id="cnn" num="1.5" title="PupilNet estimator">
           <p>
-            PupilNet is a 450k-parameter CNN built from depthwise-separable convolutions. It maps the
-            two-channel 64×64 photorefraction frame to <Tex>{"(M, J_0, J_{45})"}</Tex>. It was trained for 100
-            epochs on 100,000 synthetic frames with randomised pupil size, distance, eccentricity and
-            sensor noise. The architecture avoids operations that break INT8 quantisation, so the
-            same network can later run on a small NPU in a glasses frame.
+            PupilNet is a CNN of 152,451 parameters built from depthwise-separable convolutions. It maps
+            the two-channel 64×64 photorefraction frame, together with the camera distance, LED offset,
+            pupil radius and aperture, to <Tex>{"(M, J_0, J_{45})"}</Tex>. The base network was trained
+            for 30 epochs on 300,000 simulated frames with randomised pupil size, distance, eccentricity,
+            aberration and sensor noise. The architecture avoids operations that prevent 8-bit
+            quantisation, so that the network can run on a microcontroller. Its accuracy on photographs
+            is reported on the <Link to="/network">network page</Link>.
           </p>
           <StatRow>
-            <Stat value="0.184" unit="D" label="Test MAE, spherical equivalent M" />
-            <Stat value="0.046" unit="D" label={<>Test MAE, <Tex>J_0</Tex></>} />
-            <Stat value="0.050" unit="D" label={<>Test MAE, <Tex>{"J_{45}"}</Tex></>} />
-            <Stat value="100k" label="Synthetic training frames" />
+            <Stat value="0.52" unit="D" label="Test MAE, spherical equivalent M (simulated frames with a visible crescent)" />
+            <Stat value="0.09" unit="D" label={<>Test MAE, <Tex>J_0</Tex></>} />
+            <Stat value="0.20" unit="D" label={<>Test MAE, <Tex>{"J_{45}"}</Tex></>} />
+            <Stat value="300k" label="Simulated training frames" />
           </StatRow>
-          <Figure num={5} caption="Training history of the checkpoint used throughout this site (checkpoints/best.pt). Hover for per-epoch values.">
+          <Figure num={5} caption="Training history of the base network (checkpoints/best.pt). M error is averaged over all validation frames, including those in the blind band, where no estimate is possible.">
             <TrainingFigure />
           </Figure>
-          <Figure num={6} caption="Held-out test predictions against ground truth. Pile-ups at M = −6 and +4 D are the clipping limits of the training distribution.">
+          <Figure num={6} caption="Held-out test predictions against ground truth for the base network. Grey points lie in the blind band, where the frame carries no refraction signal.">
             <img
               src="/figures/test_scatter.png"
               alt="Scatter plots of predicted versus true M, J0 and J45 on the synthetic test set"
@@ -161,23 +164,20 @@ export function Simulation() {
             <ClosedLoopFigure eye={eye} />
           </Figure>
           <p>
-            In the full offline pipeline (20 random eyes, finer grid), the median residual drops from 1.34
-            D uncorrected to 0.08 D after a one-shot CNN correction. After refinement it is effectively
-            zero, with all 20 eyes inside the 0.25 D clinical step.
+            The CNN estimate in Figure 7 is drawn with the base network's measured test error. Sharpness
+            refinement requires a camera that views the scene through the eye's optics, so it applies to
+            the bench rather than to the wearable.
           </p>
         </Section>
 
-        <Section id="limits" num="1.7" title="What the simulation can't tell us">
+        <Section id="limits" num="1.7" title="Limits of the simulation">
           <p>
-            Every number above describes how well the model fits <em>our simulator</em>, not real eyes.
-            Real photorefraction frames have hard crescent edges, a corneal glint, retinal
-            retro-reflection and higher-order aberrations, and none of these are modelled. Measuring that gap
-            requires real images with trustworthy labels. That is the job of the{" "}
-            <Link to="/model-eye">motorized model eye</Link>.
-          </p>
-          <p>
-            To run the full-resolution Python pipeline on your own photos, use the{" "}
-            <Link to="/tools/simulate">backend tools</Link>.
+            The figures on this page describe agreement with the simulator, not with real eyes. Comparison
+            with photographs of a physical model eye shows that the simulator reproduces the side and growth
+            of the crescent and the blind band, while photographed crescents are softer than simulated ones
+            and the measured band edges lie 0.3 to 0.8 D further out. The comparison is on the{" "}
+            <Link to="/model-eye">model-eye page</Link>. The full-resolution Python pipeline is available in
+            the <Link to="/tools/simulate">tools section</Link>.
           </p>
         </Section>
       </Article>

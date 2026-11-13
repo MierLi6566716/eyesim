@@ -65,7 +65,7 @@ export function AlvarezLensFigure() {
               dark={dark}
             />
           </Suspense>
-          <div className={local.hint}>Drag to orbit, scroll to zoom, right-drag to pan</div>
+          <div className={local.hint}>Interactive view: orbit, zoom and pan</div>
         </div>
       </div>
     </div>
