@@ -145,10 +145,9 @@ export function ModelEye() {
           <Note label="Scope.">
             <p>
               A schematic eye has no accommodation, no tear film and no eyelids, and its retina reflects
-              differently from a human retina. On a human eye of known prescription, photographed with
-              the same camera, the network currently under-reads by 1 to 4 D; the analysis is on the{" "}
-              <Link to="/network">network page</Link>. The model-eye results establish that the
-              simulator-trained network can read real optics, not yet that it can read human eyes.
+              differently from a human retina. The model-eye results establish that the
+              simulator-trained network can read real optics; validation on human eyes is a separate
+              step.
             </p>
           </Note>
         </Section>

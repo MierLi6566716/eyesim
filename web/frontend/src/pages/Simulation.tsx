@@ -116,11 +116,10 @@ export function Simulation() {
           </Figure>
           <Note label="Finding.">
             <p>
-              Because the frames depend only on <Tex>M\cdot D</Tex>, the ±10% distance jitter used for
-              domain randomisation makes <Tex>M</Tex> unrecoverable to about 0.08 D. The error also grows in
-              proportion to |M|, which accounts for the fan-shaped scatter in Figure 5. On hardware,{" "}
-              <Tex>D</Tex> is measurable, so the fix is to condition the network on it, or to regress{" "}
-              <Tex>M\cdot D</Tex> and divide.
+              Because the frames depend only on <Tex>M\cdot D</Tex>, an unknown camera distance makes{" "}
+              <Tex>M</Tex> ambiguous, with an error that grows in proportion to |M|. The camera distance is
+              known on the instrument, and the network now receives it as an input together with the LED
+              offset, pupil radius and aperture.
             </p>
           </Note>
         </Section>
@@ -132,8 +131,9 @@ export function Simulation() {
             pupil radius and aperture, to <Tex>{"(M, J_0, J_{45})"}</Tex>. The base network was trained
             for 30 epochs on 300,000 simulated frames with randomised pupil size, distance, eccentricity,
             aberration and sensor noise. The architecture avoids operations that prevent 8-bit
-            quantisation, so that the network can run on a microcontroller. Its accuracy on photographs
-            is reported on the <Link to="/network">network page</Link>.
+            quantisation, so that the network can run on a microcontroller. Its readings of photographs
+            of a physical model eye, with the refraction each photograph represents, are shown on the{" "}
+            <Link to="/network#photos">network page</Link> and the <Link to="/model-eye">model-eye page</Link>.
           </p>
           <StatRow>
             <Stat value="0.52" unit="D" label="Test MAE, spherical equivalent M (simulated frames with a visible crescent)" />

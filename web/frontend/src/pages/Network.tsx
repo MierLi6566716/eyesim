@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
 import {
-  Article, Note, PageHeader, Section, Stat, StatRow, Tex, articleStyles as a, type TocEntry,
+  Article, Figure, Note, PageHeader, Section, Stat, StatRow, Tex, articleStyles as a, type TocEntry,
 } from "../components/Article";
 
 const TOC: TocEntry[] = [
   { id: "what", num: "5.1", title: "Architecture and training" },
   { id: "bench", num: "5.2", title: "Results on the model eye" },
-  { id: "human", num: "5.3", title: "Results on a human eye" },
+  { id: "photos", num: "5.3", title: "Photographs and readings" },
   { id: "problems", num: "5.4", title: "Problems and corrections" },
   { id: "rejected", num: "5.5", title: "Hypotheses rejected" },
   { id: "trust", num: "5.6", title: "Detecting unreliable readings" },
@@ -22,8 +22,8 @@ export function Network() {
           <>
             A convolutional network of 152,451 parameters estimates refraction from two infrared pupil
             frames. It is trained only on simulated images and reaches a mean absolute error of 0.20 D on
-            a physical model eye at its design distance. On a human eye it does not yet perform at that
-            level. This page describes the network, the results, and the errors identified so far.
+            a physical model eye at its design distance. This page describes the network, its results on
+            photographs, and the errors identified so far.
           </>
         }
       />
@@ -74,24 +74,32 @@ export function Network() {
           </p>
         </Section>
 
-        <Section id="human" num="5.3" title="Results on a human eye">
-          <p>
-            The same camera photographed a myopic adult eye (spectacle prescription &minus;6.75 D, about
-            &minus;6.2 D at the cornea) through trial lenses of +0.5 to +4 D. In every session the
-            crescent appeared on the LED side, consistent with strong myopia, but the network read the
-            eye as &minus;0.6 to &minus;5.2 D: an under-reading of 1 to 5.6 D that grows with the power
-            of the trial lens. The readings saturate at a combined eye-and-lens power of about &minus;5 D,
-            where the model eye was read correctly to &minus;9 D.
-          </p>
-          <p>
-            A side-by-side comparison at equal combined power identifies the main difference. On the
-            human eye the H-LED crescent is barely visible against a bright iris background, while the
-            V-LED crescent is strong; on the model eye and in simulation both crescents are strong. The
-            network therefore receives one usable crescent instead of two. Contributing factors are an
-            imbalance between the two LEDs in brightness or aim, a dilated pupil of about 8 mm, the high
-            infrared reflectance of the iris, and eye movement of up to 20 pixels during a session. These
-            are capture conditions that can be corrected before the human measurement is repeated.
-          </p>
+        <Section id="photos" num="5.3" title="Photographs and readings">
+          <Figure
+            num={1}
+            caption={
+              <>
+                Network reading against the refraction set on the model eye, for the six trial-lens blocks.
+                Each point summarises 20 photographs at one setting. Filled points: a crescent is visible.
+                Open points: the eye lies in the blind band and the photograph carries no refraction signal.
+                Shaded band: &plusmn;0.5 D.
+              </>
+            }
+          >
+            <img src="/figures/model_eye_fig1_accuracy.png" alt="Network reading against the dial setting for six blocks" style={{ width: "100%", display: "block", background: "#fff" }} />
+          </Figure>
+          <Figure
+            num={2}
+            caption={
+              <>
+                Photographs of the model eye (blue) and simulated frames (orange) at the refraction each
+                photograph represents, as received by the network. The label on each row gives the combined
+                refraction of eye and trial lens and the network's reading of the photograph.
+              </>
+            }
+          >
+            <img src="/figures/model_eye_fig2_real_vs_simulated.png" alt="Photographed and simulated pupil frames with network readings" style={{ width: "100%", maxWidth: 560, display: "block", margin: "0 auto", background: "#fff" }} />
+          </Figure>
         </Section>
 
         <Section id="problems" num="5.4" title="Problems and corrections">

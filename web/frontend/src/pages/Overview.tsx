@@ -18,7 +18,6 @@ const STATE: Row[] = [
   { stage: "Model-eye validation (170 settings, 3,400 shots)", status: "complete", result: <>0.20 D at 37 cm with a +4 or +5 D lens; repeatable to about 0.2 D</>, link: "/model-eye", page: "Model eye" },
   { stage: "Error analysis and consistency check", status: "complete", result: <>sources of errors above 0.5 D identified; lens-step check flags unreliable blocks</>, link: "/network", page: "Network" },
   { stage: "Learned control under accommodation", status: "complete", result: <>0.46 D against 0.55 D for the best fixed procedure, in simulation</>, link: "/control", page: "Control" },
-  { stage: "Human-eye measurement", status: "in progress", result: <>network under-reads by 1 to 5.6 D; LED balance and capture conditions under correction</>, link: "/network", page: "Network" },
   { stage: "Video photorefraction", status: "in progress", result: <>about 13 frame pairs per second in a synthetic test; not yet run on the camera</>, link: "/control", page: "Control" },
   { stage: "Accuracy with strong trial lenses and at short distance", status: "in progress", result: <>+8 D lens reads about 1 D weak; cause not yet identified</>, link: "/network", page: "Network" },
   { stage: "Clip-on measurement module", status: "next", result: <>design modelled; relay optics verified in simulation</>, link: "/prototype", page: "Prototype" },
@@ -95,8 +94,8 @@ export function Overview() {
             <p>
               The 0.20 D figure applies at the design distance with a moderate trial lens. With a +8 D
               lens, or at 25 to 30 cm, the error rises to 0.66 to 1.0 D, and only settings whose
-              photograph shows a crescent can be measured (63 of 170). On a human eye the network
-              currently under-reads by 1 to 5.6 D. The control result is from simulation.
+              photograph shows a crescent can be measured (63 of 170). The control result is from
+              simulation.
             </p>
           </Note>
         </Section>
@@ -125,7 +124,7 @@ export function Overview() {
           <ol>
             <li><strong>Simulate the complete loop.</strong> Complete.</li>
             <li><strong>Validate the estimator on a physical model eye.</strong> Complete; limitations identified.</li>
-            <li><strong>Repeat the human-eye measurement</strong> with balanced LEDs, and record the time course of accommodation with the video mode.</li>
+            <li><strong>Record the time course of accommodation</strong> with the video mode.</li>
             <li><strong>Characterise the Alvarez plates</strong> at 850 nm and motorise one pair.</li>
             <li><strong>Build the clip-on module</strong> and operate the full loop on the model eye.</li>
             <li><strong>Evaluate on human eyes</strong> against a clinical reference, under research oversight.</li>

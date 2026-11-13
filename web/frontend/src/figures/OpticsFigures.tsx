@@ -10,6 +10,8 @@ import { EyeControls, type Eye } from "./EyeControls";
 import styles from "./figures.module.css";
 
 const N_IMG = 256;
+/** Accommodation amplitude of a young adult (Hofstetter minimum at age 25 is 8.75 D). */
+const ACCOMMODATION_D = 8;
 /** CSS pixels per arcminute at a 60 cm viewing distance (1 CSS px = 0.2646 mm). */
 const CSS_PX_PER_ARCMIN = (600 * Math.tan(Math.PI / 10800)) / 0.2646;
 /** Width at which the chart subtends its true angle (1 image px = 1 arcmin) at 60 cm. */
@@ -29,10 +31,14 @@ function useOptics(eye: Eye) {
     const wf = wavefrontWaves(pv, d.pupil, 128);
     let wmax = 0;
     for (const v of wf) if (!Number.isNaN(v)) wmax = Math.max(wmax, Math.abs(v));
-    const psf = computePsf(pv, d.pupil);
+    // A young eye accommodates to cancel hyperopia (up to its amplitude) when viewing a distant
+    // target; myopia cannot be cancelled this way. Astigmatism is unaffected.
+    const accommodated = pv.M > 0 ? Math.min(pv.M, ACCOMMODATION_D) : 0;
+    const pvSeen = { ...pv, M: pv.M - accommodated };
+    const psf = computePsf(pvSeen, d.pupil);
     const img = chart();
     const retina = convolve(img, N_IMG, psf.kernel, psf.K);
-    return { pv, wf, wmax, psf, img, retina };
+    return { pv, wf, wmax, psf, img, retina, accommodated };
   }, [d]);
 }
 
@@ -65,6 +71,7 @@ export function OpticsChainFigure({ eye, onChange }: { eye: Eye; onChange: (e: E
           <Readout label="Peak wavefront error" value={o.wmax.toFixed(1)} unit="λ" />
           <Readout label="Geometric blur ⌀" value={o.psf.blurArcmin.toFixed(1)} unit="arcmin" tone="red" />
           <Readout label="Smallest legible row ≈" value={acuityLine} />
+          {o.accommodated > 0 && <Readout label="Hyperopia cancelled by accommodation" value={o.accommodated.toFixed(2)} unit="D" />}
         </div>
       </div>
       <div>
@@ -112,9 +119,11 @@ export function OpticsChainFigure({ eye, onChange }: { eye: Eye; onChange: (e: E
 }
 
 function snellenLimit(blurArcmin: number) {
-  // A letter stays legible while the blur disc is below roughly its stroke width × 2.
+  // A letter stays legible while its height is at least about 1.2 times the blur-disc diameter.
+  // This reproduces published uncorrected acuities for myopia at a 3 mm pupil:
+  // -0.5 D about 20/25, -1 D about 20/50, -2 D about 20/100.
   const rows = [20, 25, 30, 40, 50, 70, 100, 200];
-  for (const r of rows) if (blurArcmin <= (5 * r) / 20 * 0.55 + 0.6) return `20/${r}`;
+  for (const r of rows) if (blurArcmin <= (5 * r) / 20 / 1.2 + 0.6) return `20/${r}`;
   return "worse than 20/200";
 }
 
