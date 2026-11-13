@@ -91,6 +91,16 @@ def _downsample_kernel(psf: np.ndarray, max_size: int) -> np.ndarray:
     return binned
 
 
+def _srgb_to_linear(v: np.ndarray) -> np.ndarray:
+    v = np.clip(v, 0.0, 1.0)
+    return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4)
+
+
+def _linear_to_srgb(v: np.ndarray) -> np.ndarray:
+    v = np.clip(v, 0.0, 1.0)
+    return np.where(v <= 0.0031308, 12.92 * v, 1.055 * v ** (1 / 2.4) - 0.055)
+
+
 def simulate_case(image: np.ndarray, S: float, C: float, axis: float,
                   pupil_r_mm: float = 1.5) -> dict:
     """
@@ -107,14 +117,16 @@ def simulate_case(image: np.ndarray, S: float, C: float, axis: float,
     h, w = image.shape[:2]
     psf = calibrated_psf_for_image(S, C, axis, (h, w), pupil_radius_mm=pupil_r_mm)
 
-    blurred = blur_image(image, psf)
+    # Optics act on light intensity, so blur in linear light and re-encode for display.
+    lin = _srgb_to_linear(image)
+    blurred = _linear_to_srgb(blur_image(lin, psf))
     if image.ndim == 2:
-        predistorted = wiener_deconvolve(image, psf)
+        predistorted = _linear_to_srgb(wiener_deconvolve(lin, psf))
     else:
-        predistorted = np.stack(
-            [wiener_deconvolve(image[..., ch], psf) for ch in range(image.shape[-1])],
+        predistorted = _linear_to_srgb(np.stack(
+            [wiener_deconvolve(lin[..., ch], psf) for ch in range(image.shape[-1])],
             axis=-1,
-        )
+        ))
     kernel = _downsample_kernel(psf / psf.max(), _SHADER_KERNEL_MAX)
 
     return {

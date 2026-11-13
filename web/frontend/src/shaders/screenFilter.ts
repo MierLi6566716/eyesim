@@ -31,15 +31,18 @@ uniform sampler2D uImage;
 uniform vec2 uTexel;
 uniform float uKernel[${kernelSize * kernelSize}];
 
+vec3 toLin(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
+vec3 toSrgb(vec3 c) { c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+
 void main() {
   vec3 sum = vec3(0.0);
   for (int j = 0; j < ${kernelSize}; j++) {
     for (int i = 0; i < ${kernelSize}; i++) {
       vec2 offset = vec2(float(i - ${half}), float(j - ${half})) * uTexel;
-      sum += texture(uImage, vUv + offset).rgb * uKernel[j * ${kernelSize} + i];
+      sum += toLin(texture(uImage, vUv + offset).rgb) * uKernel[j * ${kernelSize} + i];
     }
   }
-  outColor = vec4(sum, 1.0);
+  outColor = vec4(toSrgb(sum), 1.0);
 }`;
 }
 

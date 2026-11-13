@@ -101,3 +101,12 @@ export function gray(t: number): RGB {
   const v = Math.round(255 * Math.min(1, Math.max(0, t)));
   return [v, v, v];
 }
+
+/** Gray map for images computed in linear light (blurred charts): encodes to sRGB so that
+ *  the light emitted by the screen is proportional to the simulated retinal intensity. */
+export function graySrgb(t: number): RGB {
+  const x = Math.min(1, Math.max(0, t));
+  const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+  const v = Math.round(255 * s);
+  return [v, v, v];
+}
