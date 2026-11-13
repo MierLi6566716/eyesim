@@ -20,6 +20,7 @@ const TOC: TocEntry[] = [
 
 export function Simulation() {
   const [eye, setEye] = useState<Eye>({ S: -2.25, C: -0.75, axis: 30, pupil: 1.5 });
+  const [chartDist, setChartDist] = useState(6);
   return (
     <>
       <PageHeader
@@ -65,18 +66,29 @@ export function Simulation() {
             limit, where each pupil point is deflected by the local wavefront slope. The two
             models agree on blur size and orientation to within a few percent where they overlap.
           </p>
+          <p>
+            The defocus that reaches the retina is not the prescription itself: a target at distance{" "}
+            <Tex>d</Tex> adds a vergence of <Tex>1/d</Tex>, and accommodation (taken as 8 D, a young
+            eye) cancels the positive remainder. The figure therefore blurs the chart by{" "}
+            <Tex>{String.raw`M + 1/d - A`}</Tex>. A myopic eye sees a distant chart blurred by the full{" "}
+            <Tex>|M|</Tex>, but sees the chart sharply once it is brought to the far point at{" "}
+            <Tex>{String.raw`1/|M|`}</Tex> metres — a −2.5 D eye reads comfortably at 40 cm. Published
+            uncorrected-acuity tables refer to the distant case.
+          </p>
           <Figure
             num={2}
             caption={
               <>
                 Live optics chain. (a) Wavefront error over the pupil, in waves. (b) Point-spread function,
-                log intensity. (c) A letter chart convolved with that PSF, at 1 image pixel per arcminute
-                (the bottom row is 20/20) and displayed at its true angular size for a viewing distance of
-                60 cm. A pure cylinder blurs along one meridian only.
+                log intensity. (c) A letter chart at the chosen distance, convolved with the PSF of the
+                residual defocus <Tex>{String.raw`M + 1/d - A`}</Tex>. Letter sizes are Snellen visual
+                angles (the bottom row is 20/20), drawn at true angular size for a reader 60 cm from
+                this screen. Bring the chart toward a myopic eye's far point and it sharpens; a pure
+                cylinder blurs along one meridian only.
               </>
             }
           >
-            <OpticsChainFigure eye={eye} onChange={setEye} />
+            <OpticsChainFigure eye={eye} onChange={setEye} dist={chartDist} onDist={setChartDist} />
           </Figure>
         </Section>
 
@@ -92,8 +104,8 @@ export function Simulation() {
             Pre-distortion helps most for mild error and gives out as blur grows. This is the reason the
             project moves on to correcting the optics themselves.
           </p>
-          <Figure num={3} caption="Wiener pre-distortion for the eye set in Figure 2. Raise the regulariser k to trade ringing for contrast. Edge energy is the mean squared gradient (the sharpness objective used in §1.6) relative to the unblurred chart.">
-            <PredistortFigure eye={eye} />
+          <Figure num={3} caption="Wiener pre-distortion for the eye and screen distance set in Figure 2. Raise the regulariser k to trade ringing for contrast. Edge energy is the mean squared gradient (the sharpness objective used in §1.6) relative to the unblurred chart.">
+            <PredistortFigure eye={eye} dist={chartDist} />
           </Figure>
         </Section>
 
@@ -141,7 +153,7 @@ export function Simulation() {
             <Stat value="0.20" unit="D" label={<>Test MAE, <Tex>{"J_{45}"}</Tex></>} />
             <Stat value="300k" label="Simulated training frames" />
           </StatRow>
-          <Figure num={5} caption="Training history of the base network (checkpoints/best.pt). M error is averaged over all validation frames, including those in the blind band, where no estimate is possible.">
+          <Figure num={5} caption="Training history of the base network (checkpoints/best.pt). The M error is shown twice: over every validation frame, including the blind band, where the image carries no signal and the error cannot fall below the width of the band, and over the frames with a visible crescent, where it reaches 0.52 D.">
             <TrainingFigure />
           </Figure>
           <Figure num={6} caption="Held-out test predictions against ground truth for the base network. Grey points lie in the blind band, where the frame carries no refraction signal.">

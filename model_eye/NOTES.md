@@ -31,3 +31,7 @@ No working-distance lens pre-added (the software handles the camera distance).
 | R  37 cm +4 lens, re-placed | | | | | |
 
 ## Anything else
+- px_per_mm 4.753 / 370
+- gain 4, exposure 20000
+- VERTEX 5 mm
+- sign check OK

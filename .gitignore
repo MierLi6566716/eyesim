@@ -21,3 +21,6 @@ web/backend/*.db
 # model-eye raw photos (large); results/ is tracked
 model_eye/sessions/
 model_eye/look/
+
+# local recovery artifacts
+.git-icloud-broken-backup/

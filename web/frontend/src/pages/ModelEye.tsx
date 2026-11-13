@@ -139,6 +139,20 @@ export function ModelEye() {
             107 lie inside it. A trial lens moves the eye out of the band; in the glasses design, the
             Alvarez lens performs the same function.
           </p>
+          <p>
+            The width of the band is set by the geometry, not by the sensor. The pupil stays dark as
+            long as the light returning to the camera plane spreads less than the distance from the lens
+            to the LED, which holds while the defocus relative to the camera is below about{" "}
+            <em>e</em>/(<em>d&middot;p</em>), with <em>e</em> the LED offset (10 mm on the bench),{" "}
+            <em>d</em> the camera distance and <em>p</em> the pupil diameter (Bobier &amp; Braddick,
+            1985). Moving the camera closer therefore <em>widens</em> the band in dioptres, and its
+            centre follows the camera at &minus;1/<em>d</em>. The measurements confirm both: the band
+            spans about 7.6 D at 37 cm (&minus;5.7 to +1.9), 9.5 D at 30 cm (about &minus;7.3 to +2.3)
+            and 12 D at 25 cm (about &minus;9.3 to +2.8), and widens from 7.6 to about 11.5 D when the
+            pupil is reduced from 7 to 5 mm at 37 cm. The same geometry is why clinical photoscreeners
+            work at about 1 m, where the band is only roughly 3 D wide, and why the wearable module
+            uses a 2 mm LED offset with the camera placed optically at infinity by the relay lens.
+          </p>
         </Section>
 
         <Section id="limits" num="2.6" title="Limitations">

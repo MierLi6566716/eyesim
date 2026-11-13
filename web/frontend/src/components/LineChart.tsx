@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import styles from "./LineChart.module.css";
 
 export type Series = {
@@ -42,6 +42,7 @@ export function LineChart({
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
+  const clipId = `lc-clip-${useId().replace(/[^a-zA-Z0-9-]/g, "")}`;
 
   useEffect(() => {
     const el = wrap.current;
@@ -117,6 +118,11 @@ export function LineChart({
         role="img"
         aria-label={`${yLabel} versus ${xLabel}`}
       >
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={m.l} y={m.t - 1} width={iw} height={ih + 2} />
+          </clipPath>
+        </defs>
         {yt.map((v) => (
           <g key={`y${v}`}>
             <line x1={m.l} x2={m.l + iw} y1={sy(v)} y2={sy(v)} className={styles.grid} />
@@ -143,6 +149,7 @@ export function LineChart({
           </g>
         ))}
 
+        <g clipPath={`url(#${clipId})`}>
         {series.map((s) =>
           s.dots ? (
             <g key={s.name}>
@@ -162,9 +169,10 @@ export function LineChart({
             />
           ),
         )}
+        </g>
 
         {hover != null && nearest.length > 0 && (
-          <g pointerEvents="none">
+          <g pointerEvents="none" clipPath={`url(#${clipId})`}>
             <line x1={sx(nearest[0].p[0])} x2={sx(nearest[0].p[0])} y1={m.t} y2={m.t + ih} className={styles.cross} />
             {nearest.map(({ s, p }) => (
               <circle key={s.name} cx={sx(p[0])} cy={sy(p[1])} r={4.5} fill={s.color} className={styles.hoverDot} />

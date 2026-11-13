@@ -24,22 +24,28 @@ function chart() {
 
 const logT = (v: number) => Math.log10(Math.max(v, 1e-3));
 
-function useOptics(eye: Eye) {
+function useOptics(eye: Eye, distM: number) {
   const d = useDeferredValue(eye);
+  const dd = useDeferredValue(distM);
   return useMemo(() => {
     const pv = toPowerVector(d.S, d.C, d.axis);
     const wf = wavefrontWaves(pv, d.pupil, 128);
     let wmax = 0;
     for (const v of wf) if (!Number.isNaN(v)) wmax = Math.max(wmax, Math.abs(v));
-    // A young eye accommodates to cancel hyperopia (up to its amplitude) when viewing a distant
-    // target; myopia cannot be cancelled this way. Astigmatism is unaffected.
-    const accommodated = pv.M > 0 ? Math.min(pv.M, ACCOMMODATION_D) : 0;
-    const pvSeen = { ...pv, M: pv.M - accommodated };
+    // Defocus at the retina for a chart at distance dd: the chart adds a vergence of 1/dd,
+    // and accommodation cancels the positive part up to its amplitude. Accommodation cannot
+    // relax below zero, so a myopic eye is only in focus when the chart sits at (or nearer
+    // than its accommodation allows from) its far point at 1/|M| metres. Astigmatism is
+    // unaffected by accommodation.
+    const demand = pv.M + 1 / dd;
+    const accommodated = Math.min(Math.max(demand, 0), ACCOMMODATION_D);
+    const residualM = demand - accommodated;
+    const pvSeen = { ...pv, M: residualM };
     const psf = computePsf(pvSeen, d.pupil);
     const img = chart();
     const retina = convolve(img, N_IMG, psf.kernel, psf.K);
-    return { pv, wf, wmax, psf, img, retina, accommodated };
-  }, [d]);
+    return { pv, wf, wmax, psf, img, retina, accommodated, residualM };
+  }, [d, dd]);
 }
 
 function ColorScale({ map, lo, hi }: { map: (t: number) => [number, number, number]; lo: string; hi: string }) {
@@ -59,19 +65,31 @@ function ColorScale({ map, lo, hi }: { map: (t: number) => [number, number, numb
 const divMap = (t: number) => diverging(t * 2 - 1);
 
 /** Figure: prescription → wavefront → PSF → retinal image. */
-export function OpticsChainFigure({ eye, onChange }: { eye: Eye; onChange: (e: Eye) => void }) {
-  const o = useOptics(eye);
+export function OpticsChainFigure({
+  eye, onChange, dist, onDist,
+}: { eye: Eye; onChange: (e: Eye) => void; dist: number; onDist: (d: number) => void }) {
+  const o = useOptics(eye, dist);
   const w = Math.max(o.wmax, 0.25);
   const acuityLine = snellenLimit(o.psf.blurArcmin);
+  const farPoint = o.pv.M < -0.01 ? -1 / o.pv.M : null;
   return (
     <div className={styles.split}>
       <div>
         <EyeControls eye={eye} onChange={onChange} />
+        <div className={styles.controlsGroup} style={{ marginTop: 22 }}>
+          <div className={styles.groupTitle}>Letter chart</div>
+          <Slider
+            label="Chart distance" value={dist} min={0.25} max={6} step={0.05} unit=" m"
+            digits={2} signed={false} onChange={onDist}
+          />
+        </div>
         <div className={styles.readouts}>
+          <Readout label="Defocus at the retina" value={o.residualM.toFixed(2)} unit="D" />
+          {o.accommodated > 0.005 && <Readout label="Cancelled by accommodation" value={o.accommodated.toFixed(2)} unit="D" />}
+          {farPoint != null && <Readout label="Far point of this eye" value={farPoint.toFixed(2)} unit="m" />}
           <Readout label="Peak wavefront error" value={o.wmax.toFixed(1)} unit="λ" />
           <Readout label="Geometric blur ⌀" value={o.psf.blurArcmin.toFixed(1)} unit="arcmin" tone="red" />
           <Readout label="Smallest legible row ≈" value={acuityLine} />
-          {o.accommodated > 0 && <Readout label="Hyperopia cancelled by accommodation" value={o.accommodated.toFixed(2)} unit="D" />}
         </div>
       </div>
       <div>
@@ -128,8 +146,8 @@ function snellenLimit(blurArcmin: number) {
 }
 
 /** Figure: Wiener pre-distortion (Step 2). */
-export function PredistortFigure({ eye }: { eye: Eye }) {
-  const o = useOptics(eye);
+export function PredistortFigure({ eye, dist }: { eye: Eye; dist: number }) {
+  const o = useOptics(eye, dist);
   const [k, setK] = useState(-3);
   const dk = useDeferredValue(k);
   const pre = useMemo(() => predistort(o.img, N_IMG, o.psf.kernel, o.psf.K, 10 ** dk), [o, dk]);
@@ -143,7 +161,7 @@ export function PredistortFigure({ eye }: { eye: Eye }) {
         </div>
         <div className={styles.spacer} />
         <span className={styles.badge}>
-          Eye: S {eye.S.toFixed(2)} / C {eye.C.toFixed(2)} × {eye.axis}°, pupil {eye.pupil} mm (set in Fig. 2)
+          Eye: S {eye.S.toFixed(2)} / C {eye.C.toFixed(2)} × {eye.axis}°, pupil {eye.pupil} mm, screen at {dist.toFixed(2)} m (set in Fig. 2)
         </span>
       </div>
       <div className={styles.triptych}>
