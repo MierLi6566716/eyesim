@@ -6,6 +6,9 @@ const LINKS = [
   { to: "/simulation", label: "Simulation", num: "1" },
   { to: "/model-eye", label: "Model eye", num: "2" },
   { to: "/alvarez", label: "Alvarez lens", num: "3" },
+  { to: "/prototype", label: "Prototype", num: "4" },
+  { to: "/network", label: "Network", num: "5" },
+  { to: "/control", label: "Control", num: "6" },
 ];
 
 export function NavBar() {
